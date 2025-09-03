@@ -628,11 +628,14 @@ export PATH="$PATH:$HOME/.local/bin"
 ## </SPEND_CLOUD_PATHS>
 
 # PNPM package manager
-export PNPM_HOME="/home/tom/snap/code/181/.local/share/pnpm"
+export PNPM_HOME="$HOME/.local/share/pnpm"
 case ":$PATH:" in
   *":$PNPM_HOME:"*) ;;
   *) export PATH="$PNPM_HOME:$PATH" ;;
 esac
+
+# PNPM alias for shorter commands
+alias pn=pnpm
 
 # Python environment management (pyenv)
 export PYENV_ROOT="$HOME/.pyenv"

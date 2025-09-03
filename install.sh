@@ -406,7 +406,93 @@ install_nvm() {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 📁 DOTFILES CONFIGURATION
+# � PACKAGE MANAGERS SETUP
+# ────────────────────────────────────────────────────────────────────────────────
+
+install_package_managers() {
+  print_header "📦 INSTALLING UNIVERSAL PACKAGE MANAGERS"
+  
+  # Ensure Node.js is available
+  export NVM_DIR="$HOME/.nvm"
+  # shellcheck disable=SC1091
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  
+  if ! command_exists node; then
+    print_error "Node.js not found. Cannot install package managers."
+    return 1
+  fi
+  
+  print_step "Installing ni (universal package manager)..."
+  if npm install -g @antfu/ni; then
+    print_success "ni installed successfully"
+    print_info "Usage: ni (install), nr (run), nx (execute), nu (update), nun (uninstall)"
+  else
+    print_warning "Failed to install ni via npm"
+  fi
+  
+  print_step "Installing pnpm (fast package manager)..."
+  
+  # Try multiple installation methods for pnpm
+  local pnpm_installed=false
+  
+  # Method 1: Try npm installation first (most reliable if npm is working)
+  if npm install -g pnpm@latest; then
+    print_success "pnpm installed via npm"
+    pnpm_installed=true
+  else
+    print_warning "npm installation failed, trying standalone script..."
+    
+    # Method 2: Use standalone script
+    local pnpm_script
+    pnpm_script=$(curl -fsSL https://get.pnpm.io/install.sh 2>/dev/null)
+    
+    if [[ -n "$pnpm_script" ]]; then
+      if echo "$pnpm_script" | sh -; then
+        print_success "pnpm installed via standalone script"
+        pnpm_installed=true
+        
+        # Add pnpm to current session PATH
+        export PNPM_HOME="$HOME/.local/share/pnpm"
+        case ":$PATH:" in
+          *":$PNPM_HOME:"*) ;;
+          *) export PATH="$PNPM_HOME:$PATH" ;;
+        esac
+      else
+        print_warning "Standalone script installation failed, trying Corepack..."
+      fi
+    fi
+    
+    # Method 3: Try Corepack if available
+    if ! $pnpm_installed && command_exists corepack; then
+      if corepack enable pnpm && corepack prepare pnpm@latest --activate; then
+        print_success "pnpm installed via Corepack"
+        pnpm_installed=true
+      else
+        print_warning "Corepack installation failed"
+      fi
+    fi
+  fi
+  
+  if $pnpm_installed; then
+    print_info "pnpm version: $(pnpm --version 2>/dev/null || echo 'Available after shell restart')"
+    print_info "Tip: Use 'pn' as a shorter alias for pnpm (configured in .zshrc)"
+  else
+    print_error "Failed to install pnpm via all methods"
+    print_info "You can manually install pnpm later with: npm install -g pnpm"
+  fi
+  
+  print_step "Verifying package manager installations..."
+  echo ""
+  print_info "Available package managers:"
+  command_exists npm && echo "  ✓ npm $(npm --version)"
+  command_exists ni && echo "  ✓ ni (universal package manager)"
+  command_exists pnpm && echo "  ✓ pnpm $(pnpm --version)" || echo "  ⚠ pnpm (restart shell to use)"
+  command_exists yarn && echo "  ✓ yarn $(yarn --version)" || echo "  - yarn (not installed)"
+  echo ""
+}
+
+# ────────────────────────────────────────────────────────────────────────────────
+# �📁 DOTFILES CONFIGURATION
 # ────────────────────────────────────────────────────────────────────────────────
 
 apply_dotfiles() {
@@ -499,6 +585,7 @@ display_summary() {
   echo -e "   • Pure prompt theme"
   echo -e "   • Zsh plugins (autosuggestions, syntax highlighting, z)"
   echo -e "   • NVM and Node.js LTS"
+  echo -e "   • Package managers (ni, pnpm)"
   echo -e "   • Custom .zshrc configuration"
   echo ""
 
@@ -563,6 +650,7 @@ main() {
   install_pure_prompt
   install_zsh_plugins
   install_nvm
+  install_package_managers
   apply_dotfiles
   configure_shell
   display_summary

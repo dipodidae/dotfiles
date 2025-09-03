@@ -24,7 +24,9 @@ curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh 
 ### 🟢 Node.js Development
 - **NVM** (Node Version Manager)
 - **Node.js LTS** automatically installed
-- **Universal package manager** aliases (`ni`, `nr`, etc.)
+- **ni** - Universal package manager (`ni`, `nr`, `nx`, `nu`, `nun`)
+- **pnpm** - Fast, disk space efficient package manager
+- **Package manager aliases** and shortcuts
 
 ### 🔧 Development Tools
 - **Git** with enhanced aliases and utilities
@@ -108,10 +110,15 @@ switch main             # Switch to main/master branch
 gp                      # Git push
 
 # Universal package management
-ni                      # Install dependencies (npm/yarn/pnpm)
-s                       # Start development server
-b                       # Build project
-t                       # Run tests
+ni                      # Install dependencies (auto-detects npm/yarn/pnpm/bun)
+nr start               # Run start script
+nx eslint              # Execute package binaries
+nu                     # Update dependencies  
+nun package            # Uninstall packages
+pn                     # pnpm shortcut (fast package manager)
+s                      # Start development server
+b                      # Build project
+t                      # Run tests
 
 # Project management
 proj                    # Fuzzy find and switch to any project
