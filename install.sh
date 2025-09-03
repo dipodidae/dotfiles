@@ -6,12 +6,12 @@ set -euo pipefail
 # ║                    Comprehensive Development Environment Setup               ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
-readonly SCRIPT_DIR
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC2155
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly LOG_FILE="${HOME}/.dotfiles-install.log"
-readonly NVM_VERSION="v0.40.3"
-readonly BACKUP_DIR
-BACKUP_DIR="${HOME}/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
+readonly DOTFILES_NVM_VERSION="v0.40.3"
+# shellcheck disable=SC2155
+readonly BACKUP_DIR="${HOME}/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
 readonly DOTFILES_REPO="https://github.com/dipodidae/dotfiles.git"
 readonly DOTFILES_RAW="https://raw.githubusercontent.com/dipodidae/dotfiles/main"
 
@@ -434,7 +434,7 @@ install_nvm() {
   print_step "Installing NVM..."
   if [[ ! -d "$HOME/.nvm" ]]; then
     local nvm_install_script
-    nvm_install_script=$(curl -s "https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh")
+    nvm_install_script=$(curl -s "https://raw.githubusercontent.com/nvm-sh/nvm/$DOTFILES_NVM_VERSION/install.sh")
     if [[ -n "$nvm_install_script" ]]; then
       if bash -c "$nvm_install_script"; then
         print_success "NVM installed successfully"
@@ -794,19 +794,45 @@ apply_dotfiles() {
     fi
   fi
   print_step "Applying configuration from $dotfiles_dir..."
-  if cp "$dotfiles_dir/.zshrc" "$HOME/.zshrc"; then
+  
+  # Handle .zshrc - check if it's already the same file or symlinked
+  if [[ -L "$HOME/.zshrc" ]]; then
+    local link_target
+    link_target=$(readlink "$HOME/.zshrc")
+    if [[ "$link_target" == "$dotfiles_dir/.zshrc" ]] || [[ "$(realpath "$link_target")" == "$(realpath "$dotfiles_dir/.zshrc")" ]]; then
+      print_info ".zshrc is already symlinked to dotfiles directory"
+      print_success "✅ .zshrc configuration already applied"
+    else
+      print_step "Updating .zshrc symlink..."
+      ln -sf "$dotfiles_dir/.zshrc" "$HOME/.zshrc"
+      print_success "Updated .zshrc symlink"
+    fi
+  elif [[ -f "$HOME/.zshrc" ]] && cmp -s "$dotfiles_dir/.zshrc" "$HOME/.zshrc"; then
+    print_info ".zshrc files are identical - no update needed"
+    print_success "✅ .zshrc configuration already applied"
+  elif cp "$dotfiles_dir/.zshrc" "$HOME/.zshrc" 2>/dev/null; then
     print_success "Applied .zshrc configuration"
   else
-    print_error "Failed to copy .zshrc"
-    return 1
+    print_warning "Could not copy .zshrc, but continuing..."
   fi
   local dotfiles=(".gitconfig" ".vimrc" ".tmux.conf")
   for dotfile in "${dotfiles[@]}"; do
     if [[ -f "$dotfiles_dir/$dotfile" ]]; then
-      if cp "$dotfiles_dir/$dotfile" "$HOME/$dotfile"; then
+      if [[ -L "$HOME/$dotfile" ]]; then
+        local link_target
+        link_target=$(readlink "$HOME/$dotfile")
+        if [[ "$link_target" == "$dotfiles_dir/$dotfile" ]] || [[ "$(realpath "$link_target")" == "$(realpath "$dotfiles_dir/$dotfile")" ]]; then
+          print_info "$dotfile is already symlinked to dotfiles directory"
+        else
+          ln -sf "$dotfiles_dir/$dotfile" "$HOME/$dotfile"
+          print_success "Updated $dotfile symlink"
+        fi
+      elif [[ -f "$HOME/$dotfile" ]] && cmp -s "$dotfiles_dir/$dotfile" "$HOME/$dotfile"; then
+        print_info "$dotfile files are identical - no update needed"
+      elif cp "$dotfiles_dir/$dotfile" "$HOME/$dotfile" 2>/dev/null; then
         print_success "Applied $dotfile"
       else
-        print_warning "Failed to copy $dotfile"
+        print_warning "Failed to copy $dotfile - may already be the same file"
       fi
     fi
   done
