@@ -628,41 +628,242 @@ install_development_tools() {
         case "$OS_TYPE" in
             "debian")
                 if command_exists brew; then
-                    brew install fzf
+                    if brew install fzf; then
+                        print_success "FZF installed via Homebrew"
+                    else
+                        print_warning "Failed to install fzf via Homebrew, trying apt..."
+                        if sudo apt update && sudo apt install fzf -y; then
+                            print_success "FZF installed via apt"
+                        else
+                            print_warning "Failed to install fzf via apt"
+                        fi
+                    fi
                 else
-                    sudo apt update && sudo apt install fzf -y
+                    if sudo apt update && sudo apt install fzf -y; then
+                        print_success "FZF installed via apt"
+                    else
+                        print_warning "Failed to install fzf via apt"
+                    fi
                 fi
             ;;
             "redhat")
                 if command_exists brew; then
-                    brew install fzf
-                    elif command_exists dnf; then
-                    sudo dnf install fzf -y
+                    if brew install fzf; then
+                        print_success "FZF installed via Homebrew"
+                    else
+                        print_warning "Failed to install fzf via Homebrew, trying dnf/yum..."
+                        if command_exists dnf; then
+                            sudo dnf install fzf -y && print_success "FZF installed via dnf" || print_warning "Failed to install fzf via dnf"
+                        elif command_exists yum; then
+                            sudo yum install fzf -y && print_success "FZF installed via yum" || print_warning "Failed to install fzf via yum"
+                        else
+                            print_warning "No compatible package manager found"
+                        fi
+                    fi
+                else
+                    if command_exists dnf; then
+                        sudo dnf install fzf -y && print_success "FZF installed via dnf" || print_warning "Failed to install fzf via dnf"
                     elif command_exists yum; then
-                    sudo yum install fzf -y
+                        sudo yum install fzf -y && print_success "FZF installed via yum" || print_warning "Failed to install fzf via yum"
+                    else
+                        print_warning "No compatible package manager found"
+                    fi
                 fi
             ;;
             "arch")
-                sudo pacman -S fzf --noconfirm
+                if sudo pacman -S fzf --noconfirm; then
+                    print_success "FZF installed via pacman"
+                else
+                    print_warning "Failed to install fzf via pacman"
+                fi
             ;;
             "macos")
-                brew install fzf
+                if brew install fzf; then
+                    print_success "FZF installed via Homebrew"
+                else
+                    print_warning "Failed to install fzf via Homebrew"
+                fi
             ;;
             *)
                 if command_exists brew; then
-                    brew install fzf
+                    brew install fzf && print_success "FZF installed via Homebrew" || print_warning "Failed to install fzf via Homebrew"
                 else
                     print_warning "Cannot install fzf automatically on this system"
+                    print_info "Please install fzf manually: https://github.com/junegunn/fzf#installation"
                 fi
             ;;
         esac
         if command_exists fzf; then
-            print_success "FZF installed successfully"
+            print_success "FZF installation verified"
+            print_info "Version: $(fzf --version 2>/dev/null || echo 'Available after shell restart')"
         else
-            print_warning "FZF installation may have failed"
+            print_warning "FZF installation verification failed"
         fi
     else
         print_info "FZF already installed"
+        print_info "Current version: $(fzf --version 2>/dev/null || echo 'Available after shell restart')"
+    fi
+
+    # Install additional tools that complement fzf
+    print_step "Installing fd (better find alternative for fzf)..."
+    if ! command_exists fd; then
+        case "$OS_TYPE" in
+            "debian")
+                if command_exists brew; then
+                    if brew install fd; then
+                        print_success "fd installed via Homebrew"
+                    else
+                        print_warning "Failed to install fd via Homebrew, trying apt..."
+                        if sudo apt update && sudo apt install fd-find -y; then
+                            # On Debian/Ubuntu, fd is called fd-find to avoid conflicts
+                            if ! command_exists fd && command_exists fdfind; then
+                                echo 'alias fd=fdfind' >> "$HOME/.zshrc"
+                                print_success "fd (fd-find) installed via apt with alias"
+                            else
+                                print_success "fd installed via apt"
+                            fi
+                        else
+                            print_warning "Failed to install fd via apt"
+                        fi
+                    fi
+                else
+                    if sudo apt update && sudo apt install fd-find -y; then
+                        if ! command_exists fd && command_exists fdfind; then
+                            echo 'alias fd=fdfind' >> "$HOME/.zshrc"
+                            print_success "fd (fd-find) installed via apt with alias"
+                        else
+                            print_success "fd installed via apt"
+                        fi
+                    else
+                        print_warning "Failed to install fd via apt"
+                    fi
+                fi
+            ;;
+            "redhat")
+                if command_exists brew; then
+                    brew install fd && print_success "fd installed via Homebrew" || print_warning "Failed to install fd via Homebrew"
+                elif command_exists dnf; then
+                    sudo dnf install fd-find -y && print_success "fd installed via dnf" || print_warning "Failed to install fd via dnf"
+                elif command_exists yum; then
+                    sudo yum install fd-find -y && print_success "fd installed via yum" || print_warning "Failed to install fd via yum"
+                fi
+            ;;
+            "arch")
+                sudo pacman -S fd --noconfirm && print_success "fd installed via pacman" || print_warning "Failed to install fd via pacman"
+            ;;
+            "macos")
+                brew install fd && print_success "fd installed via Homebrew" || print_warning "Failed to install fd via Homebrew"
+            ;;
+            *)
+                if command_exists brew; then
+                    brew install fd && print_success "fd installed via Homebrew" || print_warning "Failed to install fd via Homebrew"
+                else
+                    print_warning "Cannot install fd automatically on this system"
+                fi
+            ;;
+        esac
+    else
+        print_info "fd already installed"
+    fi
+
+    # Install bat for better file previews in fzf
+    print_step "Installing bat (better cat with syntax highlighting)..."
+    if ! command_exists bat; then
+        case "$OS_TYPE" in
+            "debian")
+                if command_exists brew; then
+                    if brew install bat; then
+                        print_success "bat installed via Homebrew"
+                    else
+                        print_warning "Failed to install bat via Homebrew, trying apt..."
+                        if sudo apt update && sudo apt install bat -y; then
+                            # On older Debian/Ubuntu, bat might be called batcat
+                            if ! command_exists bat && command_exists batcat; then
+                                echo 'alias bat=batcat' >> "$HOME/.zshrc"
+                                print_success "bat (batcat) installed via apt with alias"
+                            else
+                                print_success "bat installed via apt"
+                            fi
+                        else
+                            print_warning "Failed to install bat via apt"
+                        fi
+                    fi
+                else
+                    if sudo apt update && sudo apt install bat -y; then
+                        if ! command_exists bat && command_exists batcat; then
+                            echo 'alias bat=batcat' >> "$HOME/.zshrc"
+                            print_success "bat (batcat) installed via apt with alias"
+                        else
+                            print_success "bat installed via apt"
+                        fi
+                    else
+                        print_warning "Failed to install bat via apt"
+                    fi
+                fi
+            ;;
+            "redhat")
+                if command_exists brew; then
+                    brew install bat && print_success "bat installed via Homebrew" || print_warning "Failed to install bat via Homebrew"
+                elif command_exists dnf; then
+                    sudo dnf install bat -y && print_success "bat installed via dnf" || print_warning "Failed to install bat via dnf"
+                elif command_exists yum; then
+                    sudo yum install bat -y && print_success "bat installed via yum" || print_warning "Failed to install bat via yum"
+                fi
+            ;;
+            "arch")
+                sudo pacman -S bat --noconfirm && print_success "bat installed via pacman" || print_warning "Failed to install bat via pacman"
+            ;;
+            "macos")
+                brew install bat && print_success "bat installed via Homebrew" || print_warning "Failed to install bat via Homebrew"
+            ;;
+            *)
+                if command_exists brew; then
+                    brew install bat && print_success "bat installed via Homebrew" || print_warning "Failed to install bat via Homebrew"
+                else
+                    print_warning "Cannot install bat automatically on this system"
+                fi
+            ;;
+        esac
+    else
+        print_info "bat already installed"
+    fi
+
+    # Install tree for directory previews
+    print_step "Installing tree (directory structure viewer)..."
+    if ! command_exists tree; then
+        case "$OS_TYPE" in
+            "debian")
+                if command_exists brew; then
+                    brew install tree && print_success "tree installed via Homebrew" || print_warning "Failed to install tree via Homebrew"
+                else
+                    sudo apt update && sudo apt install tree -y && print_success "tree installed via apt" || print_warning "Failed to install tree via apt"
+                fi
+            ;;
+            "redhat")
+                if command_exists brew; then
+                    brew install tree && print_success "tree installed via Homebrew" || print_warning "Failed to install tree via Homebrew"
+                elif command_exists dnf; then
+                    sudo dnf install tree -y && print_success "tree installed via dnf" || print_warning "Failed to install tree via dnf"
+                elif command_exists yum; then
+                    sudo yum install tree -y && print_success "tree installed via yum" || print_warning "Failed to install tree via yum"
+                fi
+            ;;
+            "arch")
+                sudo pacman -S tree --noconfirm && print_success "tree installed via pacman" || print_warning "Failed to install tree via pacman"
+            ;;
+            "macos")
+                brew install tree && print_success "tree installed via Homebrew" || print_warning "Failed to install tree via Homebrew"
+            ;;
+            *)
+                if command_exists brew; then
+                    brew install tree && print_success "tree installed via Homebrew" || print_warning "Failed to install tree via Homebrew"
+                else
+                    print_warning "Cannot install tree automatically on this system"
+                fi
+            ;;
+        esac
+    else
+        print_info "tree already installed"
     fi
 
     # Install diff-so-fancy (Git diff enhancement)
@@ -771,6 +972,9 @@ install_development_tools() {
     print_info "🛠️ Development tools status:"
     command_exists hub && echo "  ✓ hub $(hub --version | head -n1)" || echo "  ❌ hub (not available)"
     command_exists fzf && echo "  ✓ fzf $(fzf --version)" || echo "  ❌ fzf (not available)"
+    command_exists fd && echo "  ✓ fd $(fd --version | head -n1)" || echo "  ○ fd (not available - fzf will use find)"
+    command_exists bat && echo "  ✓ bat $(bat --version | head -n1)" || echo "  ○ bat (not available - fzf will use cat)"
+    command_exists tree && echo "  ✓ tree $(tree --version | head -n1)" || echo "  ○ tree (not available - fzf will use ls)"
     command_exists diff-so-fancy && echo "  ✓ diff-so-fancy" || echo "  ❌ diff-so-fancy (not available)"
     if command_exists pyenv; then
         local pyenv_python
@@ -782,6 +986,16 @@ install_development_tools() {
     command_exists live-server && echo "  ✓ live-server" || echo "  ○ live-server (optional)"
     command_exists brew && echo "  ✓ brew $(brew --version | head -n1)" || echo "  ○ brew (not available on this system)"
     echo ""
+
+    # Show fzf integration status
+    if command_exists fzf; then
+        echo -e "${CYAN}🔍 FZF Integration:${NC}"
+        echo "  • Modern shell integration: $(fzf --zsh >/dev/null 2>&1 && echo '✅ Available (fzf --zsh)' || echo '⚠️ Fallback to manual scripts')"
+        echo "  • File finder: $(command_exists fd && echo 'fd (fast)' || echo 'find (fallback)')"
+        echo "  • File preview: $(command_exists bat && echo 'bat (syntax highlighted)' || echo 'cat (plain text)')"
+        echo "  • Directory preview: $(command_exists tree && echo 'tree (structured)' || echo 'ls (simple)')"
+        echo ""
+    fi
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -891,7 +1105,9 @@ display_summary() {
     echo -e "   • NVM and Node.js LTS"
     echo -e "   • Package managers (ni, pnpm)"
     echo -e "   • GitHub CLI (gh)"
-    echo -e "   • Development tools (hub, fzf, diff-so-fancy, pyenv, live-server)"
+    echo -e "   • Modern fzf with shell integration (CTRL-T, CTRL-R, ALT-C)"
+    echo -e "   • Enhanced fzf tools (fd, bat, tree)"
+    echo -e "   • Development tools (hub, diff-so-fancy, pyenv, live-server)"
     echo -e "   • Custom .zshrc configuration"
     echo ""
     if [[ -d "$BACKUP_DIR" ]]; then
@@ -901,7 +1117,11 @@ display_summary() {
     echo -e "${YELLOW}📝 Next steps:${NC}"
     echo -e "   1. ${WHITE}Restart your terminal${NC} or run: ${CYAN}exec zsh${NC}"
     echo -e "   2. Verify everything works: ${CYAN}help${NC}"
-    echo -e "   3. Install additional tools as needed"
+    echo -e "   3. Try fzf key bindings:"
+    echo -e "      • ${CYAN}CTRL-T${NC} - Fuzzy find files/directories"
+    echo -e "      • ${CYAN}CTRL-R${NC} - Fuzzy search command history"
+    echo -e "      • ${CYAN}ALT-C${NC}  - Fuzzy change directory"
+    echo -e "   4. Install additional tools as needed"
     echo ""
     if is_remote_install; then
         echo -e "${PURPLE}🚀 One-liner for future installs:${NC}"

@@ -48,6 +48,74 @@ export NVM_DIR="$HOME/.nvm"
 # shellcheck disable=SC1091
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 🔍 FZF Configuration
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Set up fzf key bindings and fuzzy completion (modern approach for fzf 0.48.0+)
+if command -v fzf >/dev/null 2>&1; then
+    # Set up fzf key bindings and fuzzy completion
+    source <(fzf --zsh)
+
+    # FZF default options - optimized for tmux and height mode
+    export FZF_DEFAULT_OPTS='--height 40% --tmux bottom,40% --layout reverse --border top'
+
+    # Use fd for file listing if available, otherwise fall back to find
+    if command -v fd >/dev/null 2>&1; then
+        export FZF_DEFAULT_COMMAND='fd --type f --strip-cwd-prefix --hidden --follow --exclude .git'
+        export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+    elif command -v find >/dev/null 2>&1; then
+        export FZF_DEFAULT_COMMAND='find . -name ".git" -prune -o -type f -print'
+        export FZF_CTRL_T_COMMAND="$FZF_DEFAULT_COMMAND"
+    fi
+
+    # FZF options for CTRL-T (file selection)
+    export FZF_CTRL_T_OPTS="
+      --walker-skip .git,node_modules,target,dist,.next,build
+      --preview 'bat -n --color=always {} 2>/dev/null || cat {} 2>/dev/null || echo \"[Binary file]\"'
+      --bind 'ctrl-/:change-preview-window(down|hidden|)'
+      --preview-window 'right:50%'"
+
+    # FZF options for ALT-C (directory selection)
+    export FZF_ALT_C_OPTS="
+      --walker-skip .git,node_modules,target,dist,.next,build
+      --preview 'tree -C {} | head -200 2>/dev/null || ls -la {} 2>/dev/null || echo \"Directory preview unavailable\"'
+      --preview-window 'right:50%'"
+
+    # FZF options for CTRL-R (history)
+    export FZF_CTRL_R_OPTS="
+      --bind 'ctrl-/:toggle-preview'
+      --bind 'ctrl-y:execute-silent(echo -n {2..} | pbcopy)+abort'
+      --color header:italic
+      --header 'Press CTRL-R again to toggle sort, CTRL-/ to toggle preview, CTRL-Y to copy'"
+
+    # Custom completion functions (if fd is available)
+    if command -v fd >/dev/null 2>&1; then
+        # Use fd for path completion
+        _fzf_compgen_path() {
+          fd --hidden --follow --exclude ".git" . "$1"
+        }
+
+        # Use fd for directory completion
+        _fzf_compgen_dir() {
+          fd --type d --hidden --follow --exclude ".git" . "$1"
+        }
+    fi
+
+    # Advanced customization of fzf options via _fzf_comprun function
+    _fzf_comprun() {
+      local command=$1
+      shift
+
+      case "$command" in
+        cd)           fzf --preview 'tree -C {} | head -200 2>/dev/null || ls -la {} 2>/dev/null'   "$@" ;;
+        export|unset) fzf --preview "eval 'echo \$'{}"         "$@" ;;
+        ssh)          fzf --preview 'dig {} 2>/dev/null || echo "Host: {}"'                   "$@" ;;
+        *)            fzf --preview 'bat -n --color=always {} 2>/dev/null || cat {} 2>/dev/null || echo "[Binary file]"' "$@" ;;
+      esac
+    }
+fi
+
 # ────────────────────────────────────────────────────────────────────────────────
 # 📦 NODE.JS & PACKAGE MANAGEMENT
 # ────────────────────────────────────────────────────────────────────────────────
