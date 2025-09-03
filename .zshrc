@@ -24,11 +24,13 @@ prompt pure
 # git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
 # git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 # git clone https://github.com/agkozak/zsh-z $ZSH_CUSTOM/plugins/zsh-z
+# git clone https://github.com/MichaelAquilina/zsh-you-should-use.git $ZSH_CUSTOM/plugins/you-should-use
 plugins=(
   git                    # Git aliases and functions
   zsh-autosuggestions   # Fish-like autosuggestions
   zsh-syntax-highlighting # Syntax highlighting
   zsh-z                 # Directory jumping
+  you-should-use        # Alias usage reminders
 )
 
 # Load Oh My Zsh
