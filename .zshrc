@@ -1,3 +1,7 @@
+#!/usr/bin/env zsh
+# shellcheck shell=bash disable=SC1071,SC2034,SC1091,SC2164,SC2155,SC2119,SC2120,SC2086,SC2207
+# Note: This is a zsh config file. Some zsh-specific syntax may not be fully compatible with shellcheck.
+# Many "issues" reported by shellcheck are normal zsh patterns and don't need fixing.
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║                                   ZSH CONFIG                                 ║
 # ║                          Tom's Development Environment                       ║
@@ -11,7 +15,7 @@
 export ZSH="$HOME/.oh-my-zsh"
 
 # Pure prompt setup (preferred over Spaceship)
-fpath+=($HOME/.zsh/pure)
+fpath+=("$HOME/.zsh/pure")
 autoload -U promptinit; promptinit
 prompt pure
 
@@ -28,7 +32,8 @@ plugins=(
 )
 
 # Load Oh My Zsh
-source $ZSH/oh-my-zsh.sh
+# shellcheck disable=SC1091
+source "$ZSH/oh-my-zsh.sh"
 
 # ────────────────────────────────────────────────────────────────────────────────
 # 🌍 ENVIRONMENT SETUP
@@ -36,7 +41,9 @@ source $ZSH/oh-my-zsh.sh
 
 # Node Version Manager (NVM)
 export NVM_DIR="$HOME/.nvm"
+# shellcheck disable=SC1091
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+# shellcheck disable=SC1091
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -159,7 +166,8 @@ function cluster() {
   local NC='\033[0m'
 
   # Store the original directory
-  local original_dir=$(pwd)
+  local original_dir
+  original_dir=$(pwd)
 
   # Handle stop command
   if [[ "$1" == "stop" ]]; then
@@ -167,7 +175,8 @@ function cluster() {
 
     # Stop and remove development containers first
     echo -e "${CYAN}🔍 Stopping and removing all containers...${NC}"
-    local dev_containers=$(docker ps -a --format "{{.Names}}" | grep -E "(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)")
+    local dev_containers
+    dev_containers=$(docker ps -a --format "{{.Names}}" | grep -E "(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)")
     if [[ -n "$dev_containers" ]]; then
       echo "$dev_containers" | xargs -r docker stop 2>/dev/null || true
       echo "$dev_containers" | xargs -r docker rm 2>/dev/null || true
@@ -210,11 +219,12 @@ function cluster() {
 
   # Check for and stop development containers (for start/rebuild commands)
   echo -e "${CYAN}🔍 Checking for existing containers...${NC}"
-  local dev_containers=$(docker ps -a --format "{{.Names}}" | grep -E "(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)" | head -15)
+  local dev_containers
+  dev_containers=$(docker ps -a --format "{{.Names}}" | grep -E "(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)" | head -15)
 
   if [[ -n "$dev_containers" ]]; then
     echo -e "${YELLOW}⚠️  Found existing containers that may conflict:${NC}"
-    echo "$dev_containers" | while read container; do
+    echo "$dev_containers" | while read -r container; do
       echo -e "  • $container"
     done
     echo -e "${YELLOW}🛑 Stopping and removing containers before cluster operation...${NC}"
@@ -243,15 +253,15 @@ function cluster() {
   sleep 2
 
   echo -e "${PURPLE}⚡ Starting dev for spend-cloud/api...${NC}"
-  cd ~/development/spend-cloud/api
+  cd ~/development/spend-cloud/api || return
   sct dev > /dev/null 2>&1 &
 
   echo -e "${CYAN}⚡ Starting dev for spend-cloud/proactive-frame...${NC}"
-  cd ~/development/proactive-frame
+  cd ~/development/proactive-frame || return
   sct dev > /dev/null 2>&1 &
 
   # Return to the original directory
-  cd "$original_dir"
+  cd "$original_dir" || return
 
   echo -e "${GREEN}✅ All services started!${NC}"
   echo -e "${WHITE}🌟 SCT cluster is running and dev services are running in the background.${NC}"
@@ -367,7 +377,8 @@ function migrate() {
     esac
   fi
 
-  if [[ $? -eq 0 ]]; then
+  local migration_exit_code=$?
+  if [[ $migration_exit_code -eq 0 ]]; then
     echo -e "${GREEN}✅ Migration completed successfully${NC}"
   else
     echo -e "${RED}❌ Migration failed${NC}"
@@ -377,14 +388,14 @@ function migrate() {
 
 # Git utility functions
 function glp() {
-  git --no-pager log -$1
+  git --no-pager log -"$1"
 }
 
 function gd() {
   if [[ -z $1 ]]; then
     git diff --color | diff-so-fancy
   else
-    git diff --color $1 | diff-so-fancy
+    git diff --color "$1" | diff-so-fancy
   fi
 }
 
@@ -392,7 +403,7 @@ function gdc() {
   if [[ -z $1 ]]; then
     git diff --color --cached | diff-so-fancy
   else
-    git diff --color --cached $1 | diff-so-fancy
+    git diff --color --cached "$1" | diff-so-fancy
   fi
 }
 
