@@ -113,7 +113,7 @@ gp                      # Git push
 ni                      # Install dependencies (auto-detects npm/yarn/pnpm/bun)
 nr start               # Run start script
 nx eslint              # Execute package binaries
-nu                     # Update dependencies  
+nu                     # Update dependencies
 nun package            # Uninstall packages
 pn                     # pnpm shortcut (fast package manager)
 s                      # Start development server

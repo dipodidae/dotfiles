@@ -1,11 +1,5 @@
 #!/bin/bash
 set -euo pipefail # Exit on error, undefined variables, and pipe failures
-
-# ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║                        TOM'S DOTFILES INSTALLER                             ║
-# ║                    Comprehensive Development Environment Setup               ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
-
 # Configuration
 readonly SCRIPT_DIR
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -268,7 +262,150 @@ install_base_packages() {
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
-# 🐚 ZSH CONFIGURATION
+# � GITHUB CLI INSTALLATION
+# ────────────────────────────────────────────────────────────────────────────────
+
+install_github_cli() {
+  print_header "🐙 INSTALLING GITHUB CLI"
+
+  if command_exists gh; then
+    print_info "GitHub CLI already installed"
+    print_info "Current version: $(gh --version | head -n1)"
+    return 0
+  fi
+
+  print_step "Installing GitHub CLI..."
+
+  case "$OS_TYPE" in
+  "debian")
+    print_step "Setting up GitHub CLI repository for Debian/Ubuntu..."
+
+    # Install prerequisites
+    if ! command_exists wget; then
+      sudo apt update && sudo apt install wget -y
+    fi
+
+    # Create keyring directory
+    sudo mkdir -p -m 755 /etc/apt/keyrings
+
+    # Download and install the signing key
+    local temp_keyring
+    temp_keyring=$(mktemp)
+
+    if wget -nv -O"$temp_keyring" https://cli.github.com/packages/githubcli-archive-keyring.gpg; then
+      cat "$temp_keyring" | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+      sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+      rm -f "$temp_keyring"
+    else
+      print_error "Failed to download GitHub CLI signing key"
+      return 1
+    fi
+
+    # Add the repository
+    sudo mkdir -p -m 755 /etc/apt/sources.list.d
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+
+    # Update and install
+    if sudo apt update && sudo apt install gh -y; then
+      print_success "GitHub CLI installed successfully"
+    else
+      print_error "Failed to install GitHub CLI"
+      return 1
+    fi
+    ;;
+
+  "redhat")
+    print_step "Installing GitHub CLI for Red Hat/Fedora..."
+
+    if command_exists dnf; then
+      # Try DNF5 first, then DNF4
+      if dnf --version 2>/dev/null | grep -q "dnf5"; then
+        print_info "Using DNF5..."
+        sudo dnf install dnf5-plugins -y
+        sudo dnf config-manager addrepo --from-repofile=https://cli.github.com/packages/rpm/gh-cli.repo
+        sudo dnf install gh --repo gh-cli -y
+      else
+        print_info "Using DNF4..."
+        sudo dnf install 'dnf-command(config-manager)' -y
+        sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+        sudo dnf install gh --repo gh-cli -y
+      fi
+    elif command_exists yum; then
+      print_info "Using YUM..."
+      if ! command_exists yum-config-manager; then
+        sudo yum install yum-utils -y
+      fi
+      sudo yum-config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+      sudo yum install gh -y
+    else
+      print_error "No compatible package manager found (dnf/yum)"
+      return 1
+    fi
+
+    if command_exists gh; then
+      print_success "GitHub CLI installed successfully"
+    else
+      print_error "GitHub CLI installation failed"
+      return 1
+    fi
+    ;;
+
+  "arch")
+    print_step "Installing GitHub CLI for Arch Linux..."
+    if sudo pacman -S --noconfirm github-cli; then
+      print_success "GitHub CLI installed successfully"
+    else
+      print_error "Failed to install GitHub CLI"
+      return 1
+    fi
+    ;;
+
+  "macos")
+    print_step "Installing GitHub CLI for macOS..."
+    if command_exists brew; then
+      if brew install gh; then
+        print_success "GitHub CLI installed successfully"
+      else
+        print_error "Failed to install GitHub CLI via Homebrew"
+        return 1
+      fi
+    else
+      print_error "Homebrew not found. Please install Homebrew first."
+      return 1
+    fi
+    ;;
+
+  *)
+    print_warning "Unsupported OS for automatic GitHub CLI installation"
+    print_info "Please manually install GitHub CLI from: https://cli.github.com/"
+    print_info "Or try one of these methods:"
+    echo "  • Homebrew: brew install gh"
+    echo "  • Conda: conda install gh --channel conda-forge"
+    echo "  • Pre-compiled binary: https://github.com/cli/cli/releases"
+    return 0
+    ;;
+  esac
+
+  # Verify installation and show usage
+  if command_exists gh; then
+    print_success "GitHub CLI installation verified"
+    print_info "Version: $(gh --version | head -n1)"
+    echo ""
+    print_info "📖 Quick start guide:"
+    echo "  • Authenticate: ${CYAN}gh auth login${NC}"
+    echo "  • Clone repo: ${CYAN}gh repo clone owner/repo${NC}"
+    echo "  • Create PR: ${CYAN}gh pr create${NC}"
+    echo "  • View issues: ${CYAN}gh issue list${NC}"
+    echo "  • Get help: ${CYAN}gh help${NC}"
+    echo ""
+  else
+    print_error "GitHub CLI installation verification failed"
+    return 1
+  fi
+}
+
+# ────────────────────────────────────────────────────────────────────────────────
+# �🐚 ZSH CONFIGURATION
 # ────────────────────────────────────────────────────────────────────────────────
 
 install_oh_my_zsh() {
@@ -411,17 +548,17 @@ install_nvm() {
 
 install_package_managers() {
   print_header "📦 INSTALLING UNIVERSAL PACKAGE MANAGERS"
-  
+
   # Ensure Node.js is available
   export NVM_DIR="$HOME/.nvm"
   # shellcheck disable=SC1091
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  
+
   if ! command_exists node; then
     print_error "Node.js not found. Cannot install package managers."
     return 1
   fi
-  
+
   print_step "Installing ni (universal package manager)..."
   if npm install -g @antfu/ni; then
     print_success "ni installed successfully"
@@ -429,28 +566,28 @@ install_package_managers() {
   else
     print_warning "Failed to install ni via npm"
   fi
-  
+
   print_step "Installing pnpm (fast package manager)..."
-  
+
   # Try multiple installation methods for pnpm
   local pnpm_installed=false
-  
+
   # Method 1: Try npm installation first (most reliable if npm is working)
   if npm install -g pnpm@latest; then
     print_success "pnpm installed via npm"
     pnpm_installed=true
   else
     print_warning "npm installation failed, trying standalone script..."
-    
+
     # Method 2: Use standalone script
     local pnpm_script
     pnpm_script=$(curl -fsSL https://get.pnpm.io/install.sh 2>/dev/null)
-    
+
     if [[ -n "$pnpm_script" ]]; then
       if echo "$pnpm_script" | sh -; then
         print_success "pnpm installed via standalone script"
         pnpm_installed=true
-        
+
         # Add pnpm to current session PATH
         export PNPM_HOME="$HOME/.local/share/pnpm"
         case ":$PATH:" in
@@ -461,7 +598,7 @@ install_package_managers() {
         print_warning "Standalone script installation failed, trying Corepack..."
       fi
     fi
-    
+
     # Method 3: Try Corepack if available
     if ! $pnpm_installed && command_exists corepack; then
       if corepack enable pnpm && corepack prepare pnpm@latest --activate; then
@@ -472,7 +609,7 @@ install_package_managers() {
       fi
     fi
   fi
-  
+
   if $pnpm_installed; then
     print_info "pnpm version: $(pnpm --version 2>/dev/null || echo 'Available after shell restart')"
     print_info "Tip: Use 'pn' as a shorter alias for pnpm (configured in .zshrc)"
@@ -480,7 +617,7 @@ install_package_managers() {
     print_error "Failed to install pnpm via all methods"
     print_info "You can manually install pnpm later with: npm install -g pnpm"
   fi
-  
+
   print_step "Verifying package manager installations..."
   echo ""
   print_info "Available package managers:"
@@ -586,6 +723,7 @@ display_summary() {
   echo -e "   • Zsh plugins (autosuggestions, syntax highlighting, z)"
   echo -e "   • NVM and Node.js LTS"
   echo -e "   • Package managers (ni, pnpm)"
+  echo -e "   • GitHub CLI (gh)"
   echo -e "   • Custom .zshrc configuration"
   echo ""
 
@@ -646,6 +784,7 @@ main() {
     install_base_packages
   fi
 
+  install_github_cli
   install_oh_my_zsh
   install_pure_prompt
   install_zsh_plugins
