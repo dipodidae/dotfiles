@@ -142,6 +142,31 @@ The `.zshrc` file is heavily documented and modular. You can:
 3. **Configure paths** for your specific setup
 4. **Add project-specific** shortcuts
 
+## 🚨 Dangerous Commands
+
+### ⚠️ Immediate .zshrc Overwrite
+
+If the repository is ahead of your local `.zshrc` and you want to **immediately overwrite** your home folder's `.zshrc` with the latest version from GitHub:
+
+```bash
+# ⚠️ WARNING: This will IMMEDIATELY overwrite ~/.zshrc without backup!
+curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/.zshrc > ~/.zshrc && source ~/.zshrc
+```
+
+**Alternative with backup:**
+```bash
+# Safer option - creates backup first
+cp ~/.zshrc ~/.zshrc.backup.$(date +%Y%m%d-%H%M%S) && curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/.zshrc > ~/.zshrc && source ~/.zshrc
+```
+
+**Local repository sync:**
+```bash
+# If you have the repo locally and want to sync immediately
+cp /home/tom/projects/dotfiles/.zshrc ~/.zshrc && source ~/.zshrc
+```
+
+> **⚠️ Use these commands carefully!** They will overwrite your current `.zshrc` without confirmation.
+
 ## 🚨 Troubleshooting
 
 ### Installation Issues
