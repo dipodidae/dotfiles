@@ -669,18 +669,34 @@ install_development_tools() {
                     else
                         print_warning "Failed to install fzf via Homebrew, trying dnf/yum..."
                         if command_exists dnf; then
-                            sudo dnf install fzf -y && print_success "FZF installed via dnf" || print_warning "Failed to install fzf via dnf"
+                            if sudo dnf install fzf -y; then
+                                print_success "FZF installed via dnf"
+                            else
+                                print_warning "Failed to install fzf via dnf"
+                            fi
                         elif command_exists yum; then
-                            sudo yum install fzf -y && print_success "FZF installed via yum" || print_warning "Failed to install fzf via yum"
+                            if sudo yum install fzf -y; then
+                                print_success "FZF installed via yum"
+                            else
+                                print_warning "Failed to install fzf via yum"
+                            fi
                         else
                             print_warning "No compatible package manager found"
                         fi
                     fi
                 else
                     if command_exists dnf; then
-                        sudo dnf install fzf -y && print_success "FZF installed via dnf" || print_warning "Failed to install fzf via dnf"
+                        if sudo dnf install fzf -y; then
+                            print_success "FZF installed via dnf"
+                        else
+                            print_warning "Failed to install fzf via dnf"
+                        fi
                     elif command_exists yum; then
-                        sudo yum install fzf -y && print_success "FZF installed via yum" || print_warning "Failed to install fzf via yum"
+                        if sudo yum install fzf -y; then
+                            print_success "FZF installed via yum"
+                        else
+                            print_warning "Failed to install fzf via yum"
+                        fi
                     else
                         print_warning "No compatible package manager found"
                     fi
@@ -702,7 +718,11 @@ install_development_tools() {
             ;;
             *)
                 if command_exists brew; then
-                    brew install fzf && print_success "FZF installed via Homebrew" || print_warning "Failed to install fzf via Homebrew"
+                    if brew install fzf; then
+                        print_success "FZF installed via Homebrew"
+                    else
+                        print_warning "Failed to install fzf via Homebrew"
+                    fi
                 else
                     print_warning "Cannot install fzf automatically on this system"
                     print_info "Please install fzf manually: https://github.com/junegunn/fzf#installation"
@@ -757,22 +777,46 @@ install_development_tools() {
             ;;
             "redhat")
                 if command_exists brew; then
-                    brew install fd && print_success "fd installed via Homebrew" || print_warning "Failed to install fd via Homebrew"
+                    if brew install fd; then
+                        print_success "fd installed via Homebrew"
+                    else
+                        print_warning "Failed to install fd via Homebrew"
+                    fi
                 elif command_exists dnf; then
-                    sudo dnf install fd-find -y && print_success "fd installed via dnf" || print_warning "Failed to install fd via dnf"
+                    if sudo dnf install fd-find -y; then
+                        print_success "fd installed via dnf"
+                    else
+                        print_warning "Failed to install fd via dnf"
+                    fi
                 elif command_exists yum; then
-                    sudo yum install fd-find -y && print_success "fd installed via yum" || print_warning "Failed to install fd via yum"
+                    if sudo yum install fd-find -y; then
+                        print_success "fd installed via yum"
+                    else
+                        print_warning "Failed to install fd via yum"
+                    fi
                 fi
             ;;
             "arch")
-                sudo pacman -S fd --noconfirm && print_success "fd installed via pacman" || print_warning "Failed to install fd via pacman"
+                if sudo pacman -S fd --noconfirm; then
+                    print_success "fd installed via pacman"
+                else
+                    print_warning "Failed to install fd via pacman"
+                fi
             ;;
             "macos")
-                brew install fd && print_success "fd installed via Homebrew" || print_warning "Failed to install fd via Homebrew"
+                if brew install fd; then
+                    print_success "fd installed via Homebrew"
+                else
+                    print_warning "Failed to install fd via Homebrew"
+                fi
             ;;
             *)
                 if command_exists brew; then
-                    brew install fd && print_success "fd installed via Homebrew" || print_warning "Failed to install fd via Homebrew"
+                    if brew install fd; then
+                        print_success "fd installed via Homebrew"
+                    else
+                        print_warning "Failed to install fd via Homebrew"
+                    fi
                 else
                     print_warning "Cannot install fd automatically on this system"
                 fi
@@ -819,22 +863,46 @@ install_development_tools() {
             ;;
             "redhat")
                 if command_exists brew; then
-                    brew install bat && print_success "bat installed via Homebrew" || print_warning "Failed to install bat via Homebrew"
+                    if brew install bat; then
+                        print_success "bat installed via Homebrew"
+                    else
+                        print_warning "Failed to install bat via Homebrew"
+                    fi
                 elif command_exists dnf; then
-                    sudo dnf install bat -y && print_success "bat installed via dnf" || print_warning "Failed to install bat via dnf"
+                    if sudo dnf install bat -y; then
+                        print_success "bat installed via dnf"
+                    else
+                        print_warning "Failed to install bat via dnf"
+                    fi
                 elif command_exists yum; then
-                    sudo yum install bat -y && print_success "bat installed via yum" || print_warning "Failed to install bat via yum"
+                    if sudo yum install bat -y; then
+                        print_success "bat installed via yum"
+                    else
+                        print_warning "Failed to install bat via yum"
+                    fi
                 fi
             ;;
             "arch")
-                sudo pacman -S bat --noconfirm && print_success "bat installed via pacman" || print_warning "Failed to install bat via pacman"
+                if sudo pacman -S bat --noconfirm; then
+                    print_success "bat installed via pacman"
+                else
+                    print_warning "Failed to install bat via pacman"
+                fi
             ;;
             "macos")
-                brew install bat && print_success "bat installed via Homebrew" || print_warning "Failed to install bat via Homebrew"
+                if brew install bat; then
+                    print_success "bat installed via Homebrew"
+                else
+                    print_warning "Failed to install bat via Homebrew"
+                fi
             ;;
             *)
                 if command_exists brew; then
-                    brew install bat && print_success "bat installed via Homebrew" || print_warning "Failed to install bat via Homebrew"
+                    if brew install bat; then
+                        print_success "bat installed via Homebrew"
+                    else
+                        print_warning "Failed to install bat via Homebrew"
+                    fi
                 else
                     print_warning "Cannot install bat automatically on this system"
                 fi
@@ -850,29 +918,61 @@ install_development_tools() {
         case "$OS_TYPE" in
             "debian")
                 if command_exists brew; then
-                    brew install tree && print_success "tree installed via Homebrew" || print_warning "Failed to install tree via Homebrew"
+                    if brew install tree; then
+                        print_success "tree installed via Homebrew"
+                    else
+                        print_warning "Failed to install tree via Homebrew"
+                    fi
                 else
-                    sudo apt update && sudo apt install tree -y && print_success "tree installed via apt" || print_warning "Failed to install tree via apt"
+                    if sudo apt update && sudo apt install tree -y; then
+                        print_success "tree installed via apt"
+                    else
+                        print_warning "Failed to install tree via apt"
+                    fi
                 fi
             ;;
             "redhat")
                 if command_exists brew; then
-                    brew install tree && print_success "tree installed via Homebrew" || print_warning "Failed to install tree via Homebrew"
+                    if brew install tree; then
+                        print_success "tree installed via Homebrew"
+                    else
+                        print_warning "Failed to install tree via Homebrew"
+                    fi
                 elif command_exists dnf; then
-                    sudo dnf install tree -y && print_success "tree installed via dnf" || print_warning "Failed to install tree via dnf"
+                    if sudo dnf install tree -y; then
+                        print_success "tree installed via dnf"
+                    else
+                        print_warning "Failed to install tree via dnf"
+                    fi
                 elif command_exists yum; then
-                    sudo yum install tree -y && print_success "tree installed via yum" || print_warning "Failed to install tree via yum"
+                    if sudo yum install tree -y; then
+                        print_success "tree installed via yum"
+                    else
+                        print_warning "Failed to install tree via yum"
+                    fi
                 fi
             ;;
             "arch")
-                sudo pacman -S tree --noconfirm && print_success "tree installed via pacman" || print_warning "Failed to install tree via pacman"
+                if sudo pacman -S tree --noconfirm; then
+                    print_success "tree installed via pacman"
+                else
+                    print_warning "Failed to install tree via pacman"
+                fi
             ;;
             "macos")
-                brew install tree && print_success "tree installed via Homebrew" || print_warning "Failed to install tree via Homebrew"
+                if brew install tree; then
+                    print_success "tree installed via Homebrew"
+                else
+                    print_warning "Failed to install tree via Homebrew"
+                fi
             ;;
             *)
                 if command_exists brew; then
-                    brew install tree && print_success "tree installed via Homebrew" || print_warning "Failed to install tree via Homebrew"
+                    if brew install tree; then
+                        print_success "tree installed via Homebrew"
+                    else
+                        print_warning "Failed to install tree via Homebrew"
+                    fi
                 else
                     print_warning "Cannot install tree automatically on this system"
                 fi
@@ -1025,27 +1125,47 @@ enabled=1
 gpgcheck=1
 gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/yum.repos.d/charm.repo; then
                     if command_exists dnf; then
-                        sudo dnf install glow -y && print_success "glow installed via dnf (Charm repo)" || print_warning "Failed to install glow via dnf"
+                        if sudo dnf install glow -y; then
+                            print_success "glow installed via dnf (Charm repo)"
+                        else
+                            print_warning "Failed to install glow via dnf"
+                        fi
                     elif command_exists yum; then
-                        sudo yum install glow -y && print_success "glow installed via yum (Charm repo)" || print_warning "Failed to install glow via yum"
+                        if sudo yum install glow -y; then
+                            print_success "glow installed via yum (Charm repo)"
+                        else
+                            print_warning "Failed to install glow via yum"
+                        fi
                     fi
                 else
                     print_warning "Failed to set up Charm repository"
                 fi
             ;;
             "arch")
-                sudo pacman -S glow --noconfirm && print_success "glow installed via pacman" || print_warning "Failed to install glow via pacman"
+                if sudo pacman -S glow --noconfirm; then
+                    print_success "glow installed via pacman"
+                else
+                    print_warning "Failed to install glow via pacman"
+                fi
             ;;
             "macos")
                 if command_exists brew; then
-                    brew install glow && print_success "glow installed via Homebrew" || print_warning "Failed to install glow via Homebrew"
+                    if brew install glow; then
+                        print_success "glow installed via Homebrew"
+                    else
+                        print_warning "Failed to install glow via Homebrew"
+                    fi
                 else
                     print_warning "Homebrew not found, cannot install glow automatically"
                 fi
             ;;
             *)
                 if command_exists brew; then
-                    brew install glow && print_success "glow installed via Homebrew" || print_warning "Failed to install glow via Homebrew"
+                    if brew install glow; then
+                        print_success "glow installed via Homebrew"
+                    else
+                        print_warning "Failed to install glow via Homebrew"
+                    fi
                 else
                     print_warning "Cannot install glow automatically on this system"
                     print_info "Please install glow manually: https://github.com/charmbracelet/glow"

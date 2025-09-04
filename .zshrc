@@ -67,8 +67,8 @@ export NVM_DIR="$HOME/.nvm"
 # ────────────────────────────────────────────────────────────────────────────────
 # NODE.JS & PACKAGE MANAGEMENT
 # ────────────────────────────────────────────────────────────────────────────────
+# https://github.com/antfu/ni
 
-# Package manager aliases
 alias nio="ni --prefer-offline"
 alias s="nr start"
 alias b="nr build"
@@ -81,62 +81,61 @@ alias p="nr play"
 alias c="nr typecheck"
 alias lint="nr lint"
 alias lintf="nr lint --fix"
+alias release="nr release"
 alias re="nr release"
 
 # ────────────────────────────────────────────────────────────────────────────────
 # GIT CONFIGURATION & ALIASES
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Prefer hub if installed, otherwise default git
-if command -v hub >/dev/null 2>&1; then
-  alias git=hub
-fi
+# Use github/hub
+alias git=hub
 
-# Basic Git Operations
+# Go to project root
+alias grt='cd "$(git rev-parse --show-toplevel)"'
+
 alias gs='git status'
 alias gp='git push'
 alias gpf='git push --force'
 alias gpft='git push --follow-tags'
 alias gpl='git pull --rebase'
 alias gcl='git clone'
-alias grt='cd "$(git rev-parse --show-toplevel)"'
+alias gst='git stash'
+alias grm='git rm'
+alias gmv='git mv'
 
-# Staging & Committing
+alias main='git checkout main'
+
+alias gco='git checkout'
+alias gcob='git checkout -b'
+
+alias gb='git branch'
+alias gbd='git branch -d'
+
+alias grb='git rebase'
+alias grbom='git rebase origin/master'
+alias grbc='git rebase --continue'
+
+alias gl='git log'
+alias glo='git log --oneline --graph'
+
+alias grh='git reset HEAD'
+alias grh1='git reset HEAD~1'
+
 alias ga='git add'
 alias gA='git add -A'
+
 alias gc='git commit'
 alias gcm='git commit -m'
 alias gca='git commit -a'
 alias gcam='git add -A && git commit -m'
-
-# Branching & Checkout
-alias gco='git checkout'
-alias gcob='git checkout -b'
-alias gb='git branch'
-alias gbd='git branch -d'
-
-# Simple main alias (falls back to master)
-alias main='git checkout main'
-
-# Stashing & History
-alias gst='git stash'
-alias gl='git log'
-alias glo='git log --oneline --graph'
-alias grh='git reset HEAD'
-alias grh1='git reset HEAD~1'
-
-# Rebasing & Advanced
-alias grb='git rebase'
-alias grbom='git rebase origin/master'
-alias grbc='git rebase --continue'
 alias gfrb='git fetch origin && git rebase origin/master'
 
-# Cleaning & Utilities
 alias gxn='git clean -dn'
 alias gx='git clean -df'
-alias grm='git rm'
-alias gmv='git mv'
+
 alias gsha='git rev-parse HEAD | pbcopy'
+
 alias ghci='gh run list -L 1'
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -239,28 +238,28 @@ function migrate() {
 
 # Git utility functions
 function glp() {
-  git --no-pager log -"$1"
+  git --no-pager log -$1
 }
 
 function gd() {
-  if [[ -z $1 ]]; then
+  if [[ -z $1 ]] then
     git diff --color | diff-so-fancy
   else
-    git diff --color "$1" | diff-so-fancy
+    git diff --color $1 | diff-so-fancy
   fi
 }
 
 function gdc() {
-  if [[ -z $1 ]]; then
+  if [[ -z $1 ]] then
     git diff --color --cached | diff-so-fancy
   else
-    git diff --color --cached "$1" | diff-so-fancy
+    git diff --color --cached $1 | diff-so-fancy
   fi
 }
 
 # Pull Request management
 function pr() {
-  if [[ "$1" == "ls" ]]; then
+  if [ $1 = "ls" ]; then
     gh pr list
   else
     gh pr checkout $1
@@ -271,56 +270,61 @@ function pr() {
 # DIRECTORY NAVIGATION & MANAGEMENT
 # ────────────────────────────────────────────────────────────────────────────────
 
-function d() { cd "$HOME/development" || return; }
-function repros() { cd "$HOME/repros" || return; }
-function forks() { cd "$HOME/forks" || return; }
-function projects() { cd "$HOME/projects" || return; }
-function dir() { mkdir -p "$1" && cd "$1" || return; }
+function development() {
+  cd ~/development/$1
+}
+
+function repros() {
+  cd ~/repros/$1
+}
+
+function forks() {
+  cd ~/forks/$1
+}
+
+function projects() {
+  cd ~/projects/$1
+}
+
+function dir() {
+  mkdir $1 && cd $1
+}
 
 # ────────────────────────────────────────────────────────────────────────────────
 # REPOSITORY CLONING & CODE MANAGEMENT
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Enhanced clone function
 function clone() {
-  local tool
-  if command -v hub >/dev/null 2>&1; then
-    tool=hub
+  if [[ -z $2 ]] then
+    hub clone "$@" && cd "$(basename "$1" .git)"
   else
-    tool=git
-  fi
-  if [[ -z $2 ]]; then
-    "$tool" clone "$1" && cd "$(basename "$1" .git)" || return 1
-  else
-    "$tool" clone "$1" "$2" && cd "$2" || return 1
+    hub clone "$@" && cd "$2"
   fi
 }
 
-# Unified clone function with directory targeting
-function clone_to() {
-  local target_dir="$1"; shift
-  local base
-  case "$target_dir" in
-    d|dev|development) base="$HOME/development" ;;
-    r|repros) base="$HOME/repros" ;;
-    f|forks) base="$HOME/forks" ;;
-    p|projects) base="$HOME/projects" ;;
-    *) echo "Usage: clone_to {d|r|f|p} <repo>"; return 1 ;;
-  esac
-  (cd "$base" && clone "$@" && command -v code >/dev/null 2>&1 && code .)
+# Clone to ~/development and cd to it
+function cloned() {
+  development && clone "$@" && code . && cd ~2
 }
 
-# Convenience aliases for the old functions
-alias cloned='clone_to d'
-alias cloner='clone_to r'
-alias clonef='clone_to f'
-alias clonep='clone_to p'
+function cloner() {
+  repros && clone "$@" && code . && cd ~2
+}
 
-function coded() { (cd "$HOME/development" || return; code "$@"; ) }
+function clonef() {
+  forks && clone "$@" && code . && cd ~2
+}
 
-# Development server
+function clonep() {
+  projects && clone "$@" && code . && cd ~2
+}
+
+function coded() {
+  development && code "$@" && cd -
+}
+
 function serve() {
-  if [[ -z $1 ]]; then
+  if [[ -z $1 ]] then
     live-server dist
   else
     live-server $1
@@ -406,8 +410,3 @@ function help() {
   fi
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# END OF CONFIGURATION
-# ────────────────────────────────────────────────────────────────────────────────
-
-export VITE_PROXY_TARGET="https://dev.spend.cloud"
