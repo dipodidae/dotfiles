@@ -1,4 +1,4 @@
-# 🚀 Tom's Dotfiles
+# 🚀 Modern Development Environment
 
 A comprehensive development environment setup with zsh, Oh My Zsh, custom themes, plugins, and productivity tools.
 
@@ -162,7 +162,7 @@ cp ~/.zshrc ~/.zshrc.backup.$(date +%Y%m%d-%H%M%S) && curl -fsSL https://raw.git
 **Local repository sync:**
 ```bash
 # If you have the repo locally and want to sync immediately
-cp /home/tom/projects/dotfiles/.zshrc ~/.zshrc && source ~/.zshrc
+cp /path/to/dotfiles/.zshrc ~/.zshrc && source ~/.zshrc
 ```
 
 > **⚠️ Use these commands carefully!** They will overwrite your current `.zshrc` without confirmation.

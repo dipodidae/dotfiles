@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║                        TOM'S DOTFILES INSTALLER                              ║
+# ║                  MODERN DEVELOPMENT ENVIRONMENT INSTALLER                   ║
 # ║                    Comprehensive Development Environment Setup               ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -1152,7 +1152,7 @@ display_summary() {
 main() {
     case "${1:-}" in
         --help | -h)
-            echo "Tom's Dotfiles Installer"
+            echo "Modern Development Environment Installer"
             echo ""
             echo "Usage: $0 [OPTIONS]"
             echo ""

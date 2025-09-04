@@ -4,7 +4,7 @@
 # Many "issues" reported by shellcheck are normal zsh patterns and don't need fixing.
 # ╔══════════════════════════════════════════════════════════════════════════════╗
 # ║                                   ZSH CONFIG                                 ║
-# ║                          Tom's Development Environment                       ║
+# ║                        Modern Development Environment                        ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
 # ────────────────────────────────────────────────────────────────────────────────
