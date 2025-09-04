@@ -36,13 +36,10 @@ Common:
   ni / nr / nx  install / run / exec
 
 ### Update .zshrc quickly
-Overwrite (no backup):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/.zshrc > ~/.zshrc && source ~/.zshrc
-```
-Safer:
-```bash
-cp ~/.zshrc ~/.zshrc.bak.$(date +%Y%m%d-%H%M%S) && curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/.zshrc > ~/.zshrc && source ~/.zshrc
+curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/.zshrc > ~/.zshrc && \
+curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/.zshrc.help.md > ~/.zshrc.help.md && \
+source ~/.zshrc
 ```
 
 ### Troubleshoot

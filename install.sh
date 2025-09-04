@@ -560,7 +560,7 @@ install_development_tools() {
                 if [[ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
                     brew_shellenv="$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
                 elif [[ -x "$HOME/.linuxbrew/bin/brew" ]]; then
-                    brew_shellenv="$($HOME/.linuxbrew/bin/brew shellenv)"
+                    brew_shellenv="$("$HOME"/.linuxbrew/bin/brew shellenv)"
                 elif command -v brew >/dev/null 2>&1; then
                     brew_shellenv="$(brew shellenv)"
                 fi
@@ -996,20 +996,64 @@ install_development_tools() {
         fi
     fi
 
-    # Install live-server (Development server)
-    if command_exists npm && ! command_exists live-server; then
-        print_step "Installing live-server (optional development server)..."
-        if npm install -g live-server; then
-            print_success "live-server installed successfully"
-        else
-            print_warning "Failed to install live-server - not critical"
-        fi
+    # Install glow for markdown rendering (used by help function)
+    if ! command_exists glow; then
+        print_step "Installing glow (markdown renderer for help)..."
+        case "$OS_TYPE" in
+            "debian")
+                print_step "Setting up Charm repository for glow..."
+                if sudo mkdir -p /etc/apt/keyrings && \
+                   curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg && \
+                   echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list && \
+                   sudo apt update && sudo apt install glow -y; then
+                    print_success "glow installed via Charm repository"
+                else
+                    print_warning "Failed to install glow via Charm repository, trying snap..."
+                    if command_exists snap && sudo snap install glow; then
+                        print_success "glow installed via snap"
+                    else
+                        print_warning "Failed to install glow via snap"
+                    fi
+                fi
+            ;;
+            "redhat")
+                print_step "Setting up Charm repository for glow..."
+                if echo '[charm]
+name=Charm
+baseurl=https://repo.charm.sh/yum/
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/yum.repos.d/charm.repo; then
+                    if command_exists dnf; then
+                        sudo dnf install glow -y && print_success "glow installed via dnf (Charm repo)" || print_warning "Failed to install glow via dnf"
+                    elif command_exists yum; then
+                        sudo yum install glow -y && print_success "glow installed via yum (Charm repo)" || print_warning "Failed to install glow via yum"
+                    fi
+                else
+                    print_warning "Failed to set up Charm repository"
+                fi
+            ;;
+            "arch")
+                sudo pacman -S glow --noconfirm && print_success "glow installed via pacman" || print_warning "Failed to install glow via pacman"
+            ;;
+            "macos")
+                if command_exists brew; then
+                    brew install glow && print_success "glow installed via Homebrew" || print_warning "Failed to install glow via Homebrew"
+                else
+                    print_warning "Homebrew not found, cannot install glow automatically"
+                fi
+            ;;
+            *)
+                if command_exists brew; then
+                    brew install glow && print_success "glow installed via Homebrew" || print_warning "Failed to install glow via Homebrew"
+                else
+                    print_warning "Cannot install glow automatically on this system"
+                    print_info "Please install glow manually: https://github.com/charmbracelet/glow"
+                fi
+            ;;
+        esac
     else
-        if command_exists live-server; then
-            print_info "Skipping live-server, already installed"
-        else
-            print_info "Skipping live-server (npm not available)"
-        fi
+        print_info "Skipping glow, already installed"
     fi
 
     # Create ~/.local/bin if it doesn't exist
@@ -1059,26 +1103,88 @@ install_development_tools() {
 apply_dotfiles() {
     print_header "📁 APPLYING DOTFILES CONFIGURATION"
 
-    # ALWAYS download and apply .zshrc from GitHub repository
-    print_step "Downloading latest .zshrc from GitHub..."
-    local temp_file
-    temp_file=$(mktemp)
+    if is_remote_install; then
+        # REMOTE INSTALL: Download from GitHub
+        print_step "Downloading latest .zshrc from GitHub..."
+        local temp_file
+        temp_file=$(mktemp)
 
-    if download_file ".zshrc" "$temp_file"; then
-        print_step "Applying .zshrc configuration..."
-        # HARD OVERWRITE - always replace existing file
-        if cp "$temp_file" "$HOME/.zshrc"; then
-            print_success "✅ .zshrc downloaded and applied (overwritten)"
+        if download_file ".zshrc" "$temp_file"; then
+            print_step "Applying .zshrc configuration..."
+            # HARD OVERWRITE - always replace existing file
+            if cp "$temp_file" "$HOME/.zshrc"; then
+                print_success "✅ .zshrc downloaded and applied (overwritten)"
+            else
+                print_error "Failed to copy .zshrc to home directory"
+                rm -f "$temp_file"
+                return 1
+            fi
+            rm -f "$temp_file"
         else
-            print_error "Failed to copy .zshrc to home directory"
+            print_error "Failed to download .zshrc from GitHub"
             rm -f "$temp_file"
             return 1
         fi
-        rm -f "$temp_file"
+
+        # Download and apply help file
+        print_step "Downloading help file (.zshrc.help.md)..."
+        local help_temp_file
+        help_temp_file=$(mktemp)
+
+        if download_file ".zshrc.help.md" "$help_temp_file"; then
+            print_step "Applying help file..."
+            if cp "$help_temp_file" "$HOME/.zshrc.help.md"; then
+                print_success "✅ .zshrc.help.md downloaded and applied"
+            else
+                print_error "Failed to copy .zshrc.help.md to home directory"
+                rm -f "$help_temp_file"
+                return 1
+            fi
+            rm -f "$help_temp_file"
+        else
+            print_error "Failed to download .zshrc.help.md from GitHub"
+            rm -f "$help_temp_file"
+            return 1
+        fi
     else
-        print_error "Failed to download .zshrc from GitHub"
-        rm -f "$temp_file"
-        return 1
+        # LOCAL INSTALL: Create symlinks to local dotfiles repo
+        print_step "Creating symlinks to local dotfiles repository..."
+
+        # Handle .zshrc
+        if [[ -f "$SCRIPT_DIR/.zshrc" ]]; then
+            backup_file "$HOME/.zshrc"
+            if [[ -L "$HOME/.zshrc" ]]; then
+                rm "$HOME/.zshrc"
+                print_info "Removed existing .zshrc symlink"
+            fi
+            if ln -sf "$SCRIPT_DIR/.zshrc" "$HOME/.zshrc"; then
+                print_success "✅ .zshrc symlinked to local repository"
+            else
+                print_error "Failed to create .zshrc symlink"
+                return 1
+            fi
+        else
+            print_error "Local .zshrc not found in $SCRIPT_DIR"
+            return 1
+        fi
+
+        # Handle .zshrc.help.md
+        if [[ -f "$SCRIPT_DIR/.zshrc.help.md" ]]; then
+            backup_file "$HOME/.zshrc.help.md"
+            if [[ -L "$HOME/.zshrc.help.md" ]]; then
+                rm "$HOME/.zshrc.help.md"
+                print_info "Removed existing .zshrc.help.md symlink"
+            fi
+            if ln -sf "$SCRIPT_DIR/.zshrc.help.md" "$HOME/.zshrc.help.md"; then
+                print_success "✅ .zshrc.help.md symlinked to local repository"
+            else
+                print_error "Failed to create .zshrc.help.md symlink"
+                return 1
+            fi
+        else
+            print_error "Local .zshrc.help.md not found in $SCRIPT_DIR"
+            return 1
+        fi
     fi
 
     print_success "Dotfiles configuration completed"
@@ -1120,7 +1226,8 @@ display_summary() {
     echo -e "   • Modern fzf with shell integration (CTRL-T, CTRL-R, ALT-C)"
     echo -e "   • Enhanced fzf tools (fd, bat, tree)"
     echo -e "   • Development tools (hub, diff-so-fancy, pyenv, live-server)"
-    echo -e "   • Custom .zshrc configuration"
+    echo -e "   • Glow markdown renderer (for help system)"
+    echo -e "   • Custom .zshrc configuration with help system"
     echo ""
     if [[ -d "$BACKUP_DIR" ]]; then
         echo -e "${CYAN}💾 Backups saved to:${NC} $BACKUP_DIR"
