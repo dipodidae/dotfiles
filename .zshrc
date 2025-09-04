@@ -55,7 +55,20 @@ export NVM_DIR="$HOME/.nvm"
 # Set up fzf key bindings and fuzzy completion (modern approach for fzf 0.48.0+)
 if command -v fzf >/dev/null 2>&1; then
     # Set up fzf key bindings and fuzzy completion
-    source <(fzf --zsh)
+    # Try modern approach first, fallback to legacy method
+    if fzf --zsh >/dev/null 2>&1; then
+        source <(fzf --zsh)
+    else
+        # Fallback for older fzf versions
+        if [[ -f ~/.fzf.zsh ]]; then
+            source ~/.fzf.zsh
+        elif [[ -f /usr/share/fzf/key-bindings.zsh ]]; then
+            source /usr/share/fzf/key-bindings.zsh
+        fi
+        if [[ -f /usr/share/fzf/completion.zsh ]]; then
+            source /usr/share/fzf/completion.zsh
+        fi
+    fi
 
     # FZF default options - optimized for tmux and height mode
     export FZF_DEFAULT_OPTS='--height 40% --tmux bottom,40% --layout reverse --border top'
@@ -693,7 +706,10 @@ export PATH="${PATH}:/home/tom/google-cloud-sdk/bin"
 ## <SPEND_CLOUD_PATHS>
 ## Written on 16-01-2025 at 10:22:08
 export PATH="$PATH:$HOME/.composer/vendor/bin"
-export PATH="$PATH:$(yarn global bin)"
+# Add yarn global bin to PATH if yarn is available
+if command -v yarn >/dev/null 2>&1; then
+    export PATH="$PATH:$(yarn global bin)"
+fi
 export PATH="$PATH:$HOME/.local/bin"
 ## </SPEND_CLOUD_PATHS>
 
@@ -717,7 +733,9 @@ eval "$(pyenv virtualenv-init -)"
 # ASDF version manager
 ## <SPEND_CLOUD_ASDF>
 ## Written on 02-06-2025 at 16:51:11
-. /home/tom/.asdf/asdf.sh
+if [[ -f "$HOME/.asdf/asdf.sh" ]]; then
+    . "$HOME/.asdf/asdf.sh"
+fi
 ## </SPEND_CLOUD_ASDF>
 
 # ────────────────────────────────────────────────────────────────────────────────
