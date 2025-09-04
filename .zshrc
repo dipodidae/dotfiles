@@ -14,10 +14,7 @@
 # Oh My Zsh setup
 export ZSH="$HOME/.oh-my-zsh"
 
-# Pure prompt setup (preferred over Spaceship)
-fpath+=("$HOME/.zsh/pure")
-autoload -U promptinit; promptinit
-prompt pure
+# (Pure prompt will be initialized after oh-my-zsh to avoid being overridden)
 
 # Zsh plugins configuration
 # Install commands (run these if plugins are missing):
@@ -36,6 +33,54 @@ plugins=(
 # Load Oh My Zsh
 # shellcheck disable=SC1091
 source "$ZSH/oh-my-zsh.sh"
+
+# ────────────────────────────────────────────────────────────────────────────────
+# 💎 PURE PROMPT CONFIGURATION (sensible defaults)
+# ────────────────────────────────────────────────────────────────────────────────
+# Rationale:
+#  - Initialize Pure *after* oh-my-zsh (oh-my-zsh can override PS1 otherwise)
+#  - Enable async remote checks so git arrows (⇡/⇣) show status
+#  - Ignore untracked files for faster performance in large repos
+#  - Lower execution time threshold for quicker feedback on slow commands
+#  - Show git stash indicator (≡) to surface hidden work
+#  - Slightly mute path/branch colors for lower visual noise
+#  - Keep rest near default for familiarity
+
+# Ensure Pure is available (manual install path)
+fpath+=("$HOME/.zsh/pure")
+
+# Core Pure options
+PURE_CMD_MAX_EXEC_TIME=3          # Show duration for commands taking >3s (default 5)
+PURE_GIT_PULL=0                   # Allow async fetch to update up/down arrows
+PURE_GIT_UNTRACKED_DIRTY=1        # Skip untracked files in dirty check (fast)
+# PURE_GIT_DELAY_DIRTY_CHECK=1800 # Default cache for slow dirty checks (keep)
+
+# Symbols (keep defaults; uncomment to customize)
+# PURE_PROMPT_SYMBOL="❯"
+# PURE_PROMPT_VICMD_SYMBOL="❮"
+# PURE_GIT_DOWN_ARROW="⇣"
+# PURE_GIT_UP_ARROW="⇡"
+# PURE_GIT_STASH_SYMBOL="≡"
+
+# Feature toggles via zstyle
+zstyle :prompt:pure:git:stash show yes             # Show stash indicator
+# zstyle :prompt:pure:git:fetch only_upstream yes   # (Optional) Faster arrows in mono-remote workflows
+zstyle :prompt:pure:environment:nix-shell show no  # Hide nix-shell marker (enable if you use nix often)
+
+# Color tweaks (see README for all tokens)
+zstyle :prompt:pure:path color 250                 # Muted light gray path
+zstyle :prompt:pure:git:dirty color 204            # Pink asterisk for dirty repo
+zstyle :prompt:pure:git:branch color 244           # Muted branch name
+zstyle :prompt:pure:prompt:success color green     # Green success symbol
+zstyle :prompt:pure:prompt:error color red         # Red on error
+# Leave arrows, execution time, etc. at defaults for contrast
+
+# Initialize Pure
+autoload -U promptinit; promptinit
+prompt pure
+
+# Convenience: jump to this section quickly
+alias edit-pure='${EDITOR:-vi} +/PURE\ PROMPT\ CONFIGURATION ~/.zshrc'
 
 # ────────────────────────────────────────────────────────────────────────────────
 # 🌍 ENVIRONMENT SETUP
@@ -1019,3 +1064,4 @@ function help_add_category() {
 # ────────────────────────────────────────────────────────────────────────────────
 # 🎯 END OF CONFIGURATION
 # ────────────────────────────────────────────────────────────────────────────────
+export VITE_PROXY_TARGET="https://dev.spend.cloud"
