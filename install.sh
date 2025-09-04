@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║                        TOM'S DOTFILES INSTALLER                             ║
+# ║                        TOM'S DOTFILES INSTALLER                              ║
 # ║                    Comprehensive Development Environment Setup               ║
 # ╚══════════════════════════════════════════════════════════════════════════════╝
 
@@ -244,7 +244,7 @@ install_base_packages() {
 install_github_cli() {
     print_header "🐙 INSTALLING GITHUB CLI"
     if command_exists gh; then
-        print_info "GitHub CLI already installed"
+        print_info "Skipping GitHub CLI, already installed"
         print_info "Current version: $(gh --version | head -n1)"
         return 0
     fi
@@ -361,8 +361,8 @@ install_oh_my_zsh() {
     print_header "🐚 SETTING UP ZSH ENVIRONMENT"
     backup_file "$HOME/.zshrc"
     backup_file "$HOME/.oh-my-zsh"
-    print_step "Installing Oh My Zsh..."
     if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
+        print_step "Installing Oh My Zsh..."
         export RUNZSH=no
         export CHSH=no
         if sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"; then
@@ -372,14 +372,14 @@ install_oh_my_zsh() {
             return 1
         fi
     else
-        print_info "Oh My Zsh already installed"
+        print_info "Skipping Oh My Zsh, already installed"
     fi
 }
 
 install_pure_prompt() {
-    print_step "Installing Pure prompt..."
     local pure_dir="$HOME/.zsh/pure"
     if [[ ! -d "$pure_dir" ]]; then
+        print_step "Installing Pure prompt..."
         mkdir -p "$HOME/.zsh"
         if safe_git_clone "https://github.com/sindresorhus/pure.git" "$pure_dir"; then
             print_success "Pure prompt installed"
@@ -388,7 +388,7 @@ install_pure_prompt() {
             return 1
         fi
     else
-        print_info "Pure prompt already installed"
+        print_info "Skipping Pure prompt, already installed"
         if (cd "$pure_dir" && git pull origin main >/dev/null 2>&1); then
             print_info "Pure prompt updated to latest version"
         fi
@@ -416,7 +416,7 @@ install_zsh_plugins() {
                 print_warning "Failed to install $plugin_name, skipping..."
             fi
         else
-            print_info "⚠️  $plugin_name already installed"
+            print_info "Skipping $plugin_name, already installed"
             if (cd "$plugin_dir" && git pull origin main >/dev/null 2>&1) ||
             (cd "$plugin_dir" && git pull origin master >/dev/null 2>&1); then
                 print_info "Updated $plugin_name"
@@ -431,8 +431,8 @@ install_zsh_plugins() {
 
 install_nvm() {
     print_header "🟢 INSTALLING NODE.JS ENVIRONMENT"
-    print_step "Installing NVM..."
     if [[ ! -d "$HOME/.nvm" ]]; then
+        print_step "Installing NVM..."
         local nvm_install_script
         nvm_install_script=$(curl -s "https://raw.githubusercontent.com/nvm-sh/nvm/$DOTFILES_NVM_VERSION/install.sh")
         if [[ -n "$nvm_install_script" ]]; then
@@ -460,7 +460,7 @@ install_nvm() {
             return 1
         fi
     else
-        print_info "NVM already installed"
+        print_info "Skipping NVM, already installed"
         export NVM_DIR="$HOME/.nvm"
         # shellcheck disable=SC1091
         [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
@@ -483,14 +483,19 @@ install_package_managers() {
         print_error "Node.js not found. Cannot install package managers."
         return 1
     fi
-    print_step "Installing ni (universal package manager)..."
-    if npm install -g @antfu/ni; then
-        print_success "ni installed successfully"
-        print_info "Usage: ni (install), nr (run), nx (execute), nu (update), nun (uninstall)"
+    if ! command_exists ni; then
+        print_step "Installing ni (universal package manager)..."
+        if npm install -g @antfu/ni; then
+            print_success "ni installed successfully"
+            print_info "Usage: ni (install), nr (run), nx (execute), nu (update), nun (uninstall)"
+        else
+            print_warning "Failed to install ni via npm"
+        fi
     else
-        print_warning "Failed to install ni via npm"
+        print_info "Skipping ni, already installed"
     fi
-    print_step "Installing pnpm (fast package manager)..."
+    if ! command_exists pnpm; then
+        print_step "Installing pnpm (fast package manager)..."
     local pnpm_installed=false
     if npm install -g pnpm@latest; then
         print_success "pnpm installed via npm"
@@ -528,6 +533,9 @@ install_package_managers() {
         print_error "Failed to install pnpm via all methods"
         print_info "You can manually install pnpm later with: npm install -g pnpm"
     fi
+    else
+        print_info "Skipping pnpm, already installed"
+    fi
     print_step "Verifying package manager installations..."
     echo ""
     print_info "Available package managers:"
@@ -553,19 +561,33 @@ install_development_tools() {
         if ! command_exists brew; then
             print_step "Installing Homebrew for Linux..."
             if NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
-                eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-                print_success "Homebrew installed successfully"
+                # Try to find and source the Homebrew environment
+                local brew_shellenv=""
+                if [[ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
+                    brew_shellenv="$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+                elif [[ -x "$HOME/.linuxbrew/bin/brew" ]]; then
+                    brew_shellenv="$($HOME/.linuxbrew/bin/brew shellenv)"
+                elif command -v brew >/dev/null 2>&1; then
+                    brew_shellenv="$(brew shellenv)"
+                fi
+
+                if [[ -n "$brew_shellenv" ]]; then
+                    eval "$brew_shellenv"
+                    print_success "Homebrew installed successfully"
+                else
+                    print_warning "Homebrew installed but could not configure environment automatically"
+                fi
             else
                 print_warning "Failed to install Homebrew - some tools may not be available"
             fi
         else
-            print_info "Homebrew already installed"
+            print_info "Skipping Homebrew, already installed"
         fi
     fi
 
     # Install Hub (GitHub CLI wrapper)
-    print_step "Installing Hub (GitHub CLI wrapper)..."
     if ! command_exists hub; then
+        print_step "Installing Hub (GitHub CLI wrapper)..."
         # hub is deprecated and not supported on Linux arm64 via bottles; prefer gh
         local arch
         arch="$(uname -m)"
@@ -619,12 +641,12 @@ install_development_tools() {
             fi
         fi
     else
-        print_info "Hub already installed"
+        print_info "Skipping Hub, already installed"
     fi
 
     # Install FZF (Fuzzy Finder)
-    print_step "Installing FZF (Fuzzy Finder)..."
     if ! command_exists fzf; then
+        print_step "Installing FZF (Fuzzy Finder)..."
         case "$OS_TYPE" in
             "debian")
                 if command_exists brew; then
@@ -700,13 +722,13 @@ install_development_tools() {
             print_warning "FZF installation verification failed"
         fi
     else
-        print_info "FZF already installed"
+        print_info "Skipping FZF, already installed"
         print_info "Current version: $(fzf --version 2>/dev/null || echo 'Available after shell restart')"
     fi
 
     # Install additional tools that complement fzf
-    print_step "Installing fd (better find alternative for fzf)..."
     if ! command_exists fd; then
+        print_step "Installing fd (better find alternative for fzf)..."
         case "$OS_TYPE" in
             "debian")
                 if command_exists brew; then
@@ -763,12 +785,12 @@ install_development_tools() {
             ;;
         esac
     else
-        print_info "fd already installed"
+        print_info "Skipping fd, already installed"
     fi
 
     # Install bat for better file previews in fzf
-    print_step "Installing bat (better cat with syntax highlighting)..."
     if ! command_exists bat; then
+        print_step "Installing bat (better cat with syntax highlighting)..."
         case "$OS_TYPE" in
             "debian")
                 if command_exists brew; then
@@ -825,12 +847,12 @@ install_development_tools() {
             ;;
         esac
     else
-        print_info "bat already installed"
+        print_info "Skipping bat, already installed"
     fi
 
     # Install tree for directory previews
-    print_step "Installing tree (directory structure viewer)..."
     if ! command_exists tree; then
+        print_step "Installing tree (directory structure viewer)..."
         case "$OS_TYPE" in
             "debian")
                 if command_exists brew; then
@@ -863,12 +885,12 @@ install_development_tools() {
             ;;
         esac
     else
-        print_info "tree already installed"
+        print_info "Skipping tree, already installed"
     fi
 
     # Install diff-so-fancy (Git diff enhancement)
-    print_step "Installing diff-so-fancy..."
     if ! command_exists diff-so-fancy; then
+        print_step "Installing diff-so-fancy..."
         if command_exists npm; then
             if npm install -g diff-so-fancy; then
                 print_success "diff-so-fancy installed via npm"
@@ -879,12 +901,12 @@ install_development_tools() {
             print_warning "npm not available - skipping diff-so-fancy installation"
         fi
     else
-        print_info "diff-so-fancy already installed"
+        print_info "Skipping diff-so-fancy, already installed"
     fi
 
     # Install PyEnv (Python Version Manager)
-    print_step "Installing PyEnv (Python Version Manager)..."
     if [[ ! -d "$HOME/.pyenv" ]]; then
+        print_step "Installing PyEnv (Python Version Manager)..."
         if curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash; then
             print_success "PyEnv installed successfully"
             export PYENV_ROOT="$HOME/.pyenv"
@@ -914,7 +936,7 @@ install_development_tools() {
             print_warning "Failed to install PyEnv"
         fi
     else
-        print_info "PyEnv already installed"
+        print_info "Skipping PyEnv, already installed"
         export PYENV_ROOT="$HOME/.pyenv"
         export PATH="$PYENV_ROOT/bin:$PATH"
         if command_exists pyenv; then
@@ -943,8 +965,8 @@ install_development_tools() {
     fi
 
     # Install live-server (Development server)
-    print_step "Installing live-server (optional development server)..."
     if command_exists npm && ! command_exists live-server; then
+        print_step "Installing live-server (optional development server)..."
         if npm install -g live-server; then
             print_success "live-server installed successfully"
         else
@@ -952,7 +974,7 @@ install_development_tools() {
         fi
     else
         if command_exists live-server; then
-            print_info "live-server already installed"
+            print_info "Skipping live-server, already installed"
         else
             print_info "Skipping live-server (npm not available)"
         fi
@@ -1012,16 +1034,22 @@ apply_dotfiles() {
             return 1
         fi
     else
-        # Try multiple possible locations for dotfiles
+        # Try multiple possible locations for dotfiles - all dynamic based on current user
         local possible_dirs=(
             "$SCRIPT_DIR"                           # Same directory as script
-            "/home/tom/projects/dotfiles"           # Standard location
-            "$HOME/projects/dotfiles"               # User-relative standard location
-            "$HOME/dotfiles"                        # Common alternative location
+            "$HOME/projects/dotfiles"               # User projects/dotfiles
+            "$HOME/dotfiles"                        # User dotfiles
             "$HOME/.dotfiles"                       # Hidden dotfiles directory
+            "$HOME/dev/dotfiles"                    # Alternative dev location
+            "$HOME/Development/dotfiles"            # Alternative Development location
+            "$HOME/code/dotfiles"                   # Alternative code location
+            "$HOME/src/dotfiles"                    # Alternative src location
         )
 
         print_info "Local installation detected - searching for dotfiles..."
+        print_info "Current user: $(whoami), Home: $HOME"
+        print_info "Script directory: $SCRIPT_DIR"
+
         for dir in "${possible_dirs[@]}"; do
             if [[ -f "$dir/.zshrc" ]]; then
                 dotfiles_dir="$dir"
@@ -1031,14 +1059,60 @@ apply_dotfiles() {
         done
 
         if [[ -z "$dotfiles_dir" ]]; then
-            print_error "Cannot find .zshrc file. Searched locations:"
-            for dir in "${possible_dirs[@]}"; do
-                print_error "  - $dir/.zshrc"
-            done
-            print_error ""
-            print_error "Make sure you're running this script from the dotfiles directory"
-            print_error "or that the dotfiles are in one of the expected locations."
-            return 1
+            # Last resort: check if we have any .zshrc file in common locations or current directory
+            print_info "Performing extended search for .zshrc file..."
+            local found_zshrc=""
+
+            # Check if current directory has .zshrc
+            if [[ -f "$PWD/.zshrc" ]]; then
+                found_zshrc="$PWD"
+            fi
+
+            # If still not found, look for any .zshrc files in user's directory structure
+            if [[ -z "$found_zshrc" ]]; then
+                # Search in common development directories
+                for base_dir in "$HOME" "$HOME/projects" "$HOME/dev" "$HOME/Development" "$HOME/code" "$HOME/src"; do
+                    if [[ -d "$base_dir" ]]; then
+                        # Look for dotfiles directories containing .zshrc
+                        while IFS= read -r -d '' zshrc_file; do
+                            local parent_dir
+                            parent_dir=$(dirname "$zshrc_file")
+                            if [[ -f "$zshrc_file" && -d "$parent_dir" ]]; then
+                                found_zshrc="$parent_dir"
+                                break 2
+                            fi
+                        done < <(find "$base_dir" -maxdepth 3 -name ".zshrc" -print0 2>/dev/null)
+                    fi
+                done
+            fi
+
+            if [[ -n "$found_zshrc" ]]; then
+                dotfiles_dir="$found_zshrc"
+                print_success "Found .zshrc in: $dotfiles_dir"
+            else
+                print_error "Cannot find .zshrc file anywhere."
+                print_error "Searched the following directories:"
+                for dir in "${possible_dirs[@]}"; do
+                    if [[ -d "$dir" ]]; then
+                        print_error "  ✓ $dir (exists, but no .zshrc found)"
+                    else
+                        print_error "  ✗ $dir (directory doesn't exist)"
+                    fi
+                done
+                print_error ""
+                print_error "Current working directory: $PWD"
+                print_error "Files in current directory:"
+                ls -la "$PWD" | head -10 | while read -r line; do
+                    print_error "    $line"
+                done
+                print_error ""
+                print_error "To fix this issue, either:"
+                print_error "1. Run this script from a directory that contains .zshrc"
+                print_error "2. Place your .zshrc file in one of the expected locations above"
+                print_error "3. Create a .zshrc file in the script directory: $SCRIPT_DIR"
+                print_error "4. Or run the script remotely to download the dotfiles automatically"
+                return 1
+            fi
         fi
     fi
     print_step "Applying configuration from $dotfiles_dir..."
