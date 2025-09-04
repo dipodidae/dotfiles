@@ -1051,6 +1051,10 @@ apply_dotfiles() {
         print_info "Script directory: $SCRIPT_DIR"
 
         for dir in "${possible_dirs[@]}"; do
+            # Skip if it's a backup directory
+            if [[ "$dir" == *".dotfiles-backup-"* ]]; then
+                continue
+            fi
             if [[ -f "$dir/.zshrc" ]]; then
                 dotfiles_dir="$dir"
                 print_info "Found dotfiles directory: $dotfiles_dir"
@@ -1059,39 +1063,24 @@ apply_dotfiles() {
         done
 
         if [[ -z "$dotfiles_dir" ]]; then
-            # Last resort: check if we have any .zshrc file in common locations or current directory
-            print_info "Performing extended search for .zshrc file..."
-            local found_zshrc=""
+            # Fallback options in order of preference
+            print_info "No dotfiles directory found in standard locations."
+            print_info "Checking fallback options..."
 
-            # Check if current directory has .zshrc
+            # Option 1: Current working directory
             if [[ -f "$PWD/.zshrc" ]]; then
-                found_zshrc="$PWD"
-            fi
-
-            # If still not found, look for any .zshrc files in user's directory structure
-            if [[ -z "$found_zshrc" ]]; then
-                # Search in common development directories
-                for base_dir in "$HOME" "$HOME/projects" "$HOME/dev" "$HOME/Development" "$HOME/code" "$HOME/src"; do
-                    if [[ -d "$base_dir" ]]; then
-                        # Look for dotfiles directories containing .zshrc
-                        while IFS= read -r -d '' zshrc_file; do
-                            local parent_dir
-                            parent_dir=$(dirname "$zshrc_file")
-                            if [[ -f "$zshrc_file" && -d "$parent_dir" ]]; then
-                                found_zshrc="$parent_dir"
-                                break 2
-                            fi
-                        done < <(find "$base_dir" -maxdepth 3 -name ".zshrc" -print0 2>/dev/null)
-                    fi
-                done
-            fi
-
-            if [[ -n "$found_zshrc" ]]; then
-                dotfiles_dir="$found_zshrc"
-                print_success "Found .zshrc in: $dotfiles_dir"
+                print_info "Found .zshrc in current directory: $PWD"
+                dotfiles_dir="$PWD"
+            # Option 2: Use existing .zshrc from home directory (copy it to script dir for future use)
+            elif [[ -f "$HOME/.zshrc" ]]; then
+                print_info "Found existing .zshrc in home directory"
+                print_info "Using existing configuration from: $HOME/.zshrc"
+                # We'll just use the home directory as our dotfiles source
+                dotfiles_dir="$HOME"
+                print_warning "Note: Using existing .zshrc from $HOME - consider organizing your dotfiles"
             else
                 print_error "Cannot find .zshrc file anywhere."
-                print_error "Searched the following directories:"
+                print_error "Searched the following directories for dotfiles:"
                 for dir in "${possible_dirs[@]}"; do
                     if [[ -d "$dir" ]]; then
                         print_error "  ✓ $dir (exists, but no .zshrc found)"
@@ -1100,17 +1089,15 @@ apply_dotfiles() {
                     fi
                 done
                 print_error ""
-                print_error "Current working directory: $PWD"
-                print_error "Files in current directory:"
-                ls -la "$PWD" | head -10 | while read -r line; do
-                    print_error "    $line"
-                done
+                print_error "Also checked:"
+                print_error "  • Current directory: $PWD"
+                print_error "  • Home directory: $HOME/.zshrc"
                 print_error ""
-                print_error "To fix this issue, either:"
-                print_error "1. Run this script from a directory that contains .zshrc"
-                print_error "2. Place your .zshrc file in one of the expected locations above"
-                print_error "3. Create a .zshrc file in the script directory: $SCRIPT_DIR"
-                print_error "4. Or run the script remotely to download the dotfiles automatically"
+                print_error "To fix this issue:"
+                print_error "1. Run this script from a dotfiles directory containing .zshrc"
+                print_error "2. Place a .zshrc file in one of the expected locations above"
+                print_error "3. Or run the script remotely to download the dotfiles automatically:"
+                print_error "   curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh | bash"
                 return 1
             fi
         fi
