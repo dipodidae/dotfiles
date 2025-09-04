@@ -144,12 +144,15 @@ safe_git_clone() {
         else
             ((retry_count++))
             if [[ $retry_count -lt $max_retries ]]; then
-                print_warning "Clone failed, retrying ($retry_count/$max_retries)..."
+                print_warning "Clone failed (attempt $retry_count/$max_retries), retrying..."
                 sleep 2
+                # Clean up failed clone attempt
+                [[ -d "$target_dir" ]] && rm -rf "$target_dir"
             fi
         fi
     done
     print_error "Failed to clone $repo_url after $max_retries attempts"
+    print_error "This could be due to network issues or the repository being unavailable"
     return 1
 }
 
@@ -414,12 +417,15 @@ install_zsh_plugins() {
                 print_success "✅ Installed $plugin_name"
             else
                 print_warning "Failed to install $plugin_name, skipping..."
+                print_info "You can manually install later: git clone $plugin_repo $plugin_dir"
             fi
         else
             print_info "Skipping $plugin_name, already installed"
             if (cd "$plugin_dir" && git pull origin main >/dev/null 2>&1) ||
             (cd "$plugin_dir" && git pull origin master >/dev/null 2>&1); then
                 print_info "Updated $plugin_name"
+            else
+                print_info "$plugin_name update skipped (may not be a git repository)"
             fi
         fi
     done
@@ -587,12 +593,11 @@ install_development_tools() {
 
     # Install Hub (GitHub CLI wrapper)
     if ! command_exists hub; then
-        print_step "Installing Hub (GitHub CLI wrapper)..."
         # hub is deprecated and not supported on Linux arm64 via bottles; prefer gh
         local arch
         arch="$(uname -m)"
         if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]] && [[ "$OS_TYPE" != "macos" ]]; then
-            print_warning "Skipping hub on ${arch} Linux (deprecated/no arm64 support). Using gh instead."
+            print_info "Skipping hub on ${arch} Linux (deprecated/no arm64 support). Using gh instead."
             if command_exists gh; then
                 if ! grep -qE '(^|[[:space:]])alias[[:space:]]+hub=' "$HOME/.zshrc" 2>/dev/null; then
                     echo "alias hub='gh'" >> "$HOME/.zshrc"
@@ -600,6 +605,7 @@ install_development_tools() {
                 fi
             fi
         else
+            print_step "Installing Hub (GitHub CLI wrapper)..."
             case "$OS_TYPE" in
                 "debian")
                     if command_exists brew; then
@@ -907,6 +913,40 @@ install_development_tools() {
     # Install PyEnv (Python Version Manager)
     if [[ ! -d "$HOME/.pyenv" ]]; then
         print_step "Installing PyEnv (Python Version Manager)..."
+
+        # Install build dependencies first
+        print_info "Installing Python build dependencies..."
+        case "$OS_TYPE" in
+            "debian")
+                if sudo apt update && sudo apt install -y build-essential libssl-dev zlib1g-dev \
+                libbz2-dev libreadline-dev libsqlite3-dev curl \
+                libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev; then
+                    print_success "Python build dependencies installed"
+                else
+                    print_warning "Failed to install some Python build dependencies"
+                fi
+            ;;
+            "redhat")
+                if command_exists dnf; then
+                    sudo dnf groupinstall -y "Development Tools"
+                    sudo dnf install -y gcc openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel sqlite-devel xz-devel
+                elif command_exists yum; then
+                    sudo yum groupinstall -y "Development Tools"
+                    sudo yum install -y gcc openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel sqlite-devel xz-devel
+                fi
+            ;;
+            "arch")
+                sudo pacman -S --needed base-devel openssl zlib xz tk
+            ;;
+            "macos")
+                # macOS should have Xcode command line tools
+                if ! xcode-select -p >/dev/null 2>&1; then
+                    print_info "Installing Xcode command line tools..."
+                    xcode-select --install
+                fi
+            ;;
+        esac
+
         if curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash; then
             print_success "PyEnv installed successfully"
             export PYENV_ROOT="$HOME/.pyenv"
@@ -926,7 +966,7 @@ install_development_tools() {
                         print_success "Python $latest_python installed and set as global default"
                         print_info "Python version: $(python --version 2>/dev/null || echo 'Available after shell restart')"
                     else
-                        print_warning "Failed to install Python $latest_python"
+                        print_warning "Failed to install Python $latest_python - you may need to install additional build dependencies"
                     fi
                 else
                     print_warning "Could not determine latest Python version to install"
@@ -1104,45 +1144,30 @@ apply_dotfiles() {
     fi
     print_step "Applying configuration from $dotfiles_dir..."
 
-    # Handle .zshrc - check if it's already the same file or symlinked
-    if [[ -L "$HOME/.zshrc" ]]; then
-        local link_target
-        link_target=$(readlink "$HOME/.zshrc")
-        if [[ "$link_target" == "$dotfiles_dir/.zshrc" ]] || [[ "$(realpath "$link_target")" == "$(realpath "$dotfiles_dir/.zshrc")" ]]; then
-            print_info ".zshrc is already symlinked to dotfiles directory"
-            print_success "✅ .zshrc configuration already applied"
+    # Handle .zshrc - HARD OVERWRITE (always replace existing file)
+    if [[ -f "$dotfiles_dir/.zshrc" ]]; then
+        print_step "Overwriting .zshrc configuration..."
+        if cp "$dotfiles_dir/.zshrc" "$HOME/.zshrc"; then
+            print_success "✅ .zshrc configuration applied (overwritten)"
         else
-            print_step "Updating .zshrc symlink..."
-            ln -sf "$dotfiles_dir/.zshrc" "$HOME/.zshrc"
-            print_success "Updated .zshrc symlink"
+            print_error "Failed to copy .zshrc configuration"
+            return 1
         fi
-        elif [[ -f "$HOME/.zshrc" ]] && cmp -s "$dotfiles_dir/.zshrc" "$HOME/.zshrc"; then
-        print_info ".zshrc files are identical - no update needed"
-        print_success "✅ .zshrc configuration already applied"
-        elif cp "$dotfiles_dir/.zshrc" "$HOME/.zshrc" 2>/dev/null; then
-        print_success "Applied .zshrc configuration"
     else
-        print_warning "Could not copy .zshrc, but continuing..."
+        print_warning "No .zshrc file found in dotfiles directory: $dotfiles_dir"
     fi
+    # Handle other dotfiles - HARD OVERWRITE
     local dotfiles=(".gitconfig" ".vimrc" ".tmux.conf")
     for dotfile in "${dotfiles[@]}"; do
         if [[ -f "$dotfiles_dir/$dotfile" ]]; then
-            if [[ -L "$HOME/$dotfile" ]]; then
-                local link_target
-                link_target=$(readlink "$HOME/$dotfile")
-                if [[ "$link_target" == "$dotfiles_dir/$dotfile" ]] || [[ "$(realpath "$link_target")" == "$(realpath "$dotfiles_dir/$dotfile")" ]]; then
-                    print_info "$dotfile is already symlinked to dotfiles directory"
-                else
-                    ln -sf "$dotfiles_dir/$dotfile" "$HOME/$dotfile"
-                    print_success "Updated $dotfile symlink"
-                fi
-                elif [[ -f "$HOME/$dotfile" ]] && cmp -s "$dotfiles_dir/$dotfile" "$HOME/$dotfile"; then
-                print_info "$dotfile files are identical - no update needed"
-                elif cp "$dotfiles_dir/$dotfile" "$HOME/$dotfile" 2>/dev/null; then
-                print_success "Applied $dotfile"
+            print_step "Overwriting $dotfile configuration..."
+            if cp "$dotfiles_dir/$dotfile" "$HOME/$dotfile"; then
+                print_success "✅ $dotfile applied (overwritten)"
             else
-                print_warning "Failed to copy $dotfile - may already be the same file"
+                print_warning "Failed to copy $dotfile"
             fi
+        else
+            print_info "No $dotfile found in dotfiles directory, skipping"
         fi
     done
     if is_remote_install && [[ -d "$dotfiles_dir" && "$dotfiles_dir" == *".dotfiles-temp" ]]; then
