@@ -72,19 +72,6 @@ is_remote_install() {
     [[ ! -f "$SCRIPT_DIR/.zshrc" && ! -d "$SCRIPT_DIR/.git" ]]
 }
 
-download_dotfiles() {
-    print_step "Downloading dotfiles repository..."
-    local dotfiles_dir="$HOME/.dotfiles-temp"
-    [[ -d "$dotfiles_dir" ]] && rm -rf "$dotfiles_dir"
-    if safe_git_clone "$DOTFILES_REPO" "$dotfiles_dir"; then
-        print_success "Dotfiles repository downloaded"
-        echo "$dotfiles_dir"
-    else
-        print_error "Failed to download dotfiles repository"
-        return 1
-    fi
-}
-
 download_file() {
     local file_path="$1"
     local target_path="$2"
@@ -409,17 +396,8 @@ install_zsh_plugins() {
     )
     for plugin_info in "${plugins[@]}"; do
         local plugin_name="${plugin_info%%:*}"
-        local plugin_repo="${plugin_info##*:}"
+        local plugin_repo="${plugin_info#*:}"
         local plugin_dir="$zsh_custom/plugins/$plugin_name"
-
-        # Debug: Check if URL is correctly parsed
-        if [[ "$plugin_repo" != https://* && "$plugin_repo" != git@* ]]; then
-            print_warning "Invalid repository URL for $plugin_name: $plugin_repo"
-            print_info "Trying to fix URL by adding https: prefix..."
-            if [[ "$plugin_repo" == //* ]]; then
-                plugin_repo="https:$plugin_repo"
-            fi
-        fi
 
         if [[ ! -d "$plugin_dir" ]]; then
             print_step "Installing $plugin_name..."
@@ -1080,139 +1058,30 @@ install_development_tools() {
 
 apply_dotfiles() {
     print_header "📁 APPLYING DOTFILES CONFIGURATION"
-    local dotfiles_dir=""
-    if is_remote_install; then
-        print_info "Remote installation detected - downloading dotfiles directly..."
 
-        # For remote installation, download individual dotfiles directly
-        # This is more reliable than cloning the entire repository
-        local dotfiles=(".zshrc" ".gitconfig" ".vimrc" ".tmux.conf")
+    # ALWAYS download and apply .zshrc from GitHub repository
+    print_step "Downloading latest .zshrc from GitHub..."
+    local temp_file
+    temp_file=$(mktemp)
 
-        for dotfile in "${dotfiles[@]}"; do
-            print_step "Checking for $dotfile..."
-            local temp_file
-            temp_file=$(mktemp)
-
-            if download_file "$dotfile" "$temp_file"; then
-                print_step "Downloading and applying $dotfile..."
-                # HARD OVERWRITE - always replace existing file
-                if cp "$temp_file" "$temp_file.bak" && cp "$temp_file" "$HOME/$dotfile"; then
-                    print_success "✅ $dotfile downloaded and applied (overwritten)"
-                else
-                    print_error "Failed to copy $dotfile to home directory"
-                fi
-                rm -f "$temp_file" "$temp_file.bak"
-            else
-                print_info "Skipping $dotfile (not found in repository)"
-                rm -f "$temp_file"
-            fi
-        done
-
-        print_success "Remote dotfiles installation completed"
-        return 0
-    else
-        # Try multiple possible locations for dotfiles - all dynamic based on current user
-        local possible_dirs=(
-            "$SCRIPT_DIR"                           # Same directory as script
-            "$HOME/projects/dotfiles"               # User projects/dotfiles
-            "$HOME/dotfiles"                        # User dotfiles
-            "$HOME/.dotfiles"                       # Hidden dotfiles directory
-            "$HOME/dev/dotfiles"                    # Alternative dev location
-            "$HOME/Development/dotfiles"            # Alternative Development location
-            "$HOME/code/dotfiles"                   # Alternative code location
-            "$HOME/src/dotfiles"                    # Alternative src location
-        )
-
-        print_info "Local installation detected - searching for dotfiles..."
-        print_info "Current user: $(whoami), Home: $HOME"
-        print_info "Script directory: $SCRIPT_DIR"
-
-        for dir in "${possible_dirs[@]}"; do
-            # Skip if it's a backup directory
-            if [[ "$dir" == *".dotfiles-backup-"* ]]; then
-                continue
-            fi
-            if [[ -f "$dir/.zshrc" ]]; then
-                dotfiles_dir="$dir"
-                print_info "Found dotfiles directory: $dotfiles_dir"
-                break
-            fi
-        done
-
-        if [[ -z "$dotfiles_dir" ]]; then
-            # Fallback options in order of preference
-            print_info "No dotfiles directory found in standard locations."
-            print_info "Checking fallback options..."
-
-            # Option 1: Current working directory
-            if [[ -f "$PWD/.zshrc" ]]; then
-                print_info "Found .zshrc in current directory: $PWD"
-                dotfiles_dir="$PWD"
-            # Option 2: Use existing .zshrc from home directory (copy it to script dir for future use)
-            elif [[ -f "$HOME/.zshrc" ]]; then
-                print_info "Found existing .zshrc in home directory"
-                print_info "Using existing configuration from: $HOME/.zshrc"
-                # We'll just use the home directory as our dotfiles source
-                dotfiles_dir="$HOME"
-                print_warning "Note: Using existing .zshrc from $HOME - consider organizing your dotfiles"
-            else
-                print_error "Cannot find .zshrc file anywhere."
-                print_error "Searched the following directories for dotfiles:"
-                for dir in "${possible_dirs[@]}"; do
-                    if [[ -d "$dir" ]]; then
-                        print_error "  ✓ $dir (exists, but no .zshrc found)"
-                    else
-                        print_error "  ✗ $dir (directory doesn't exist)"
-                    fi
-                done
-                print_error ""
-                print_error "Also checked:"
-                print_error "  • Current directory: $PWD"
-                print_error "  • Home directory: $HOME/.zshrc"
-                print_error ""
-                print_error "To fix this issue:"
-                print_error "1. Run this script from a dotfiles directory containing .zshrc"
-                print_error "2. Place a .zshrc file in one of the expected locations above"
-                print_error "3. Or run the script remotely to download the dotfiles automatically:"
-                print_error "   curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh | bash"
-                return 1
-            fi
-        fi
-    fi
-    print_step "Applying configuration from $dotfiles_dir..."
-
-    # Handle .zshrc - HARD OVERWRITE (always replace existing file)
-    if [[ -f "$dotfiles_dir/.zshrc" ]]; then
-        # Don't try to copy .zshrc to itself
-        if [[ "$dotfiles_dir/.zshrc" -ef "$HOME/.zshrc" ]]; then
-            print_info ".zshrc is already in the correct location (same file)"
-            print_success "✅ .zshrc configuration already applied"
+    if download_file ".zshrc" "$temp_file"; then
+        print_step "Applying .zshrc configuration..."
+        # HARD OVERWRITE - always replace existing file
+        if cp "$temp_file" "$HOME/.zshrc"; then
+            print_success "✅ .zshrc downloaded and applied (overwritten)"
         else
-            print_step "Overwriting .zshrc configuration..."
-            if cp "$dotfiles_dir/.zshrc" "$HOME/.zshrc"; then
-                print_success "✅ .zshrc configuration applied (overwritten)"
-            else
-                print_error "Failed to copy .zshrc configuration"
-                return 1
-            fi
+            print_error "Failed to copy .zshrc to home directory"
+            rm -f "$temp_file"
+            return 1
         fi
+        rm -f "$temp_file"
     else
-        print_warning "No .zshrc file found in dotfiles directory: $dotfiles_dir"
+        print_error "Failed to download .zshrc from GitHub"
+        rm -f "$temp_file"
+        return 1
     fi
-    # Handle other dotfiles - HARD OVERWRITE
-    local dotfiles=(".gitconfig" ".vimrc" ".tmux.conf")
-    for dotfile in "${dotfiles[@]}"; do
-        if [[ -f "$dotfiles_dir/$dotfile" ]]; then
-            print_step "Overwriting $dotfile configuration..."
-            if cp "$dotfiles_dir/$dotfile" "$HOME/$dotfile"; then
-                print_success "✅ $dotfile applied (overwritten)"
-            else
-                print_warning "Failed to copy $dotfile"
-            fi
-        else
-            print_info "No $dotfile found in dotfiles directory, skipping"
-        fi
-    done
+
+    print_success "Dotfiles configuration completed"
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
