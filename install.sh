@@ -411,6 +411,16 @@ install_zsh_plugins() {
         local plugin_name="${plugin_info%%:*}"
         local plugin_repo="${plugin_info##*:}"
         local plugin_dir="$zsh_custom/plugins/$plugin_name"
+
+        # Debug: Check if URL is correctly parsed
+        if [[ "$plugin_repo" != https://* && "$plugin_repo" != git@* ]]; then
+            print_warning "Invalid repository URL for $plugin_name: $plugin_repo"
+            print_info "Trying to fix URL by adding https: prefix..."
+            if [[ "$plugin_repo" == //* ]]; then
+                plugin_repo="https:$plugin_repo"
+            fi
+        fi
+
         if [[ ! -d "$plugin_dir" ]]; then
             print_step "Installing $plugin_name..."
             if safe_git_clone "$plugin_repo" "$plugin_dir"; then
@@ -961,12 +971,15 @@ install_development_tools() {
                 latest_python=$(pyenv install --list 2>/dev/null | grep -E '^\s*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' ')
                 if [[ -n "$latest_python" ]]; then
                     print_info "Installing Python $latest_python..."
-                    if pyenv install "$latest_python"; then
+                    # Try to install with timeout to avoid hanging
+                    if timeout 300 pyenv install "$latest_python" 2>/dev/null; then
                         pyenv global "$latest_python"
                         print_success "Python $latest_python installed and set as global default"
                         print_info "Python version: $(python --version 2>/dev/null || echo 'Available after shell restart')"
                     else
-                        print_warning "Failed to install Python $latest_python - you may need to install additional build dependencies"
+                        print_warning "Failed to install Python $latest_python - this may take time or need additional dependencies"
+                        print_info "You can manually install later with: pyenv install $latest_python"
+                        print_info "Common issues: missing build dependencies or network timeout"
                     fi
                 else
                     print_warning "Could not determine latest Python version to install"
@@ -991,11 +1004,12 @@ install_development_tools() {
                 latest_python=$(pyenv install --list 2>/dev/null | grep -E '^\s*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' ')
                 if [[ -n "$latest_python" ]]; then
                     print_info "Installing Python $latest_python..."
-                    if pyenv install "$latest_python"; then
+                    if timeout 300 pyenv install "$latest_python" 2>/dev/null; then
                         pyenv global "$latest_python"
                         print_success "Python $latest_python installed and set as global default"
                     else
-                        print_warning "Failed to install Python $latest_python"
+                        print_warning "Failed to install Python $latest_python - this may take time or need additional dependencies"
+                        print_info "You can manually install later with: pyenv install $latest_python"
                     fi
                 fi
             else
@@ -1068,11 +1082,34 @@ apply_dotfiles() {
     print_header "📁 APPLYING DOTFILES CONFIGURATION"
     local dotfiles_dir=""
     if is_remote_install; then
-        print_info "Remote installation detected - downloading dotfiles..."
-        dotfiles_dir=$(download_dotfiles)
-        if [[ -z "$dotfiles_dir" ]]; then
-            return 1
-        fi
+        print_info "Remote installation detected - downloading dotfiles directly..."
+
+        # For remote installation, download individual dotfiles directly
+        # This is more reliable than cloning the entire repository
+        local dotfiles=(".zshrc" ".gitconfig" ".vimrc" ".tmux.conf")
+
+        for dotfile in "${dotfiles[@]}"; do
+            print_step "Checking for $dotfile..."
+            local temp_file
+            temp_file=$(mktemp)
+
+            if download_file "$dotfile" "$temp_file"; then
+                print_step "Downloading and applying $dotfile..."
+                # HARD OVERWRITE - always replace existing file
+                if cp "$temp_file" "$temp_file.bak" && cp "$temp_file" "$HOME/$dotfile"; then
+                    print_success "✅ $dotfile downloaded and applied (overwritten)"
+                else
+                    print_error "Failed to copy $dotfile to home directory"
+                fi
+                rm -f "$temp_file" "$temp_file.bak"
+            else
+                print_info "Skipping $dotfile (not found in repository)"
+                rm -f "$temp_file"
+            fi
+        done
+
+        print_success "Remote dotfiles installation completed"
+        return 0
     else
         # Try multiple possible locations for dotfiles - all dynamic based on current user
         local possible_dirs=(
@@ -1146,12 +1183,18 @@ apply_dotfiles() {
 
     # Handle .zshrc - HARD OVERWRITE (always replace existing file)
     if [[ -f "$dotfiles_dir/.zshrc" ]]; then
-        print_step "Overwriting .zshrc configuration..."
-        if cp "$dotfiles_dir/.zshrc" "$HOME/.zshrc"; then
-            print_success "✅ .zshrc configuration applied (overwritten)"
+        # Don't try to copy .zshrc to itself
+        if [[ "$dotfiles_dir/.zshrc" -ef "$HOME/.zshrc" ]]; then
+            print_info ".zshrc is already in the correct location (same file)"
+            print_success "✅ .zshrc configuration already applied"
         else
-            print_error "Failed to copy .zshrc configuration"
-            return 1
+            print_step "Overwriting .zshrc configuration..."
+            if cp "$dotfiles_dir/.zshrc" "$HOME/.zshrc"; then
+                print_success "✅ .zshrc configuration applied (overwritten)"
+            else
+                print_error "Failed to copy .zshrc configuration"
+                return 1
+            fi
         fi
     else
         print_warning "No .zshrc file found in dotfiles directory: $dotfiles_dir"
@@ -1170,10 +1213,6 @@ apply_dotfiles() {
             print_info "No $dotfile found in dotfiles directory, skipping"
         fi
     done
-    if is_remote_install && [[ -d "$dotfiles_dir" && "$dotfiles_dir" == *".dotfiles-temp" ]]; then
-        rm -rf "$dotfiles_dir"
-        print_info "Cleaned up temporary files"
-    fi
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
