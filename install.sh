@@ -1012,14 +1012,32 @@ apply_dotfiles() {
             return 1
         fi
     else
-        if [[ -f "$SCRIPT_DIR/.zshrc" ]]; then
-            dotfiles_dir="$SCRIPT_DIR"
-            elif [[ -f "/home/tom/projects/dotfiles/.zshrc" ]]; then
-            dotfiles_dir="/home/tom/projects/dotfiles"
-        else
-            print_error "Cannot find .zshrc file. Expected locations:"
-            print_error "  - $SCRIPT_DIR/.zshrc"
-            print_error "  - /home/tom/projects/dotfiles/.zshrc"
+        # Try multiple possible locations for dotfiles
+        local possible_dirs=(
+            "$SCRIPT_DIR"                           # Same directory as script
+            "/home/tom/projects/dotfiles"           # Standard location
+            "$HOME/projects/dotfiles"               # User-relative standard location
+            "$HOME/dotfiles"                        # Common alternative location
+            "$HOME/.dotfiles"                       # Hidden dotfiles directory
+        )
+
+        print_info "Local installation detected - searching for dotfiles..."
+        for dir in "${possible_dirs[@]}"; do
+            if [[ -f "$dir/.zshrc" ]]; then
+                dotfiles_dir="$dir"
+                print_info "Found dotfiles directory: $dotfiles_dir"
+                break
+            fi
+        done
+
+        if [[ -z "$dotfiles_dir" ]]; then
+            print_error "Cannot find .zshrc file. Searched locations:"
+            for dir in "${possible_dirs[@]}"; do
+                print_error "  - $dir/.zshrc"
+            done
+            print_error ""
+            print_error "Make sure you're running this script from the dotfiles directory"
+            print_error "or that the dotfiles are in one of the expected locations."
             return 1
         fi
     fi
