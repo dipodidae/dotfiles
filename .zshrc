@@ -159,44 +159,114 @@ alias cpf='code ~/development/proactive-frame'
 # ────────────────────────────────────────────────────────────────────────────────
 
 # SpendCloud Cluster Management
+# Starts the development cluster with all services
 function cluster() {
-  local sub="$1"
-  case "$sub" in
-    ''|start)
-      if [[ "$sub" == '--rebuild' || "$2" == '--rebuild' ]]; then
-        sct cluster start --build --pull || return 1
-      elif [[ "$1" == '--rebuild' ]]; then
-        sct cluster start --build --pull || return 1
-      else
-        sct cluster start || return 1
-      fi
-      (cd ~/development/spend-cloud/api 2>/dev/null && sct dev >/dev/null 2>&1 &)
-      (cd ~/development/proactive-frame 2>/dev/null && sct dev >/dev/null 2>&1 &)
-      ;;
-    --rebuild)
-      sct cluster start --build --pull || return 1
-      (cd ~/development/spend-cloud/api 2>/dev/null && sct dev >/dev/null 2>&1 &)
-      (cd ~/development/proactive-frame 2>/dev/null && sct dev >/dev/null 2>&1 &)
-      ;;
-    stop)
-      sct cluster stop
-      ;;
-    logs)
-      if [[ -n "$2" ]]; then
-        sct cluster logs "$2"
-      else
-        sct cluster logs
-      fi
-      ;;
-    help|-h|--help)
-      echo "Usage: cluster [start|--rebuild|stop|logs [service]]"
-      ;;
-    *)
-      echo "Unknown cluster subcommand: $sub"
-      echo "Usage: cluster [start|--rebuild|stop|logs [service]]"
+  local RED='\033[0;31m'
+  local GREEN='\033[0;32m'
+  local YELLOW='\033[1;33m'
+  local BLUE='\033[0;34m'
+  local PURPLE='\033[0;35m'
+  local CYAN='\033[0;36m'
+  local WHITE='\033[1;37m'
+  local NC='\033[0m'
+
+  # Store the original directory
+  local original_dir=$(pwd)
+
+  # Handle stop command
+  if [[ "$1" == "stop" ]]; then
+    echo -e "${YELLOW}🛑 Stopping all cluster services...${NC}"
+
+    # Stop and remove development containers first
+    echo -e "${CYAN}🔍 Stopping and removing all containers...${NC}"
+    local dev_containers=$(docker ps -a --format "{{.Names}}" | grep -E "(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)")
+    if [[ -n "$dev_containers" ]]; then
+      echo "$dev_containers" | xargs -r docker stop 2>/dev/null || true
+      echo "$dev_containers" | xargs -r docker rm 2>/dev/null || true
+      echo -e "${GREEN}✅ Containers stopped and removed${NC}"
+    fi
+
+    # Stop SCT cluster
+    echo -e "${BLUE}🛑 Stopping SCT cluster...${NC}"
+    sct cluster stop
+    echo -e "${GREEN}✅ Cluster stopped successfully${NC}"
+    return 0
+  fi
+
+  # Handle logs command
+  if [[ "$1" == "logs" ]]; then
+    if [[ -n "$2" ]]; then
+      echo -e "${CYAN}📋 Showing logs for service: $2${NC}"
+      sct cluster logs "$2"
+    else
+      echo -e "${CYAN}📋 Showing logs for all cluster services...${NC}"
+      sct cluster logs
+    fi
+    return 0
+  fi
+
+  # Handle help command
+  if [[ "$1" == "help" || "$1" == "-h" || "$1" == "--help" ]]; then
+    echo -e "${GREEN}🏢 SpendCloud Cluster Management${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  cluster                    # Start cluster and development services"
+    echo -e "  cluster --rebuild          # Rebuild and start cluster with fresh images"
+    echo -e "  cluster stop              # Stop all cluster and development services"
+    echo -e "  cluster logs [service]    # Show logs for all services or specific service"
+    echo -e "  cluster help              # Show this help message"
+    echo ""
+    echo -e "${BLUE}💡 Automatically manages development containers and SCT cluster${NC}"
+    return 0
+  fi
+
+  # Check for and stop development containers (for start/rebuild commands)
+  echo -e "${CYAN}🔍 Checking for existing containers...${NC}"
+  local dev_containers=$(docker ps -a --format "{{.Names}}" | grep -E "(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)" | head -15)
+
+  if [[ -n "$dev_containers" ]]; then
+    echo -e "${YELLOW}⚠️  Found existing containers that may conflict:${NC}"
+    echo "$dev_containers" | while read -r container; do
+      echo -e "  • $container"
+    done
+    echo -e "${YELLOW}🛑 Stopping and removing containers before cluster operation...${NC}"
+    echo "$dev_containers" | xargs -r docker stop 2>/dev/null || true
+    echo "$dev_containers" | xargs -r docker rm 2>/dev/null || true
+    echo -e "${GREEN}✅ Containers stopped and removed${NC}"
+  else
+    echo -e "${GREEN}✅ No conflicting containers found${NC}"
+  fi
+
+  if [[ "$1" == "--rebuild" ]]; then
+    echo -e "${YELLOW}🔄 Rebuilding cluster with fresh images...${NC}"
+    echo -e "${BLUE}🚀 Starting SCT cluster...${NC}"
+    if ! sct cluster start --build --pull; then
+      echo -e "${RED}❌ Failed to start SCT cluster. Aborting...${NC}"
       return 1
-      ;;
-  esac
+    fi
+  else
+    echo -e "${BLUE}🚀 Starting SCT cluster...${NC}"
+    if ! sct cluster start; then
+      echo -e "${RED}❌ Failed to start SCT cluster. Aborting...${NC}"
+      return 1
+    fi
+  fi
+
+  sleep 2
+
+  echo -e "${PURPLE}⚡ Starting dev for spend-cloud/api...${NC}"
+  cd ~/development/spend-cloud/api
+  sct dev > /dev/null 2>&1 &
+
+  echo -e "${CYAN}⚡ Starting dev for spend-cloud/proactive-frame...${NC}"
+  cd ~/development/proactive-frame
+  sct dev > /dev/null 2>&1 &
+
+  # Return to the original directory
+  cd "$original_dir"
+
+  echo -e "${GREEN}✅ All services started!${NC}"
+  echo -e "${WHITE}🌟 SCT cluster is running and dev services are running in the background.${NC}"
 }
 
 # Database Migration Management
@@ -242,7 +312,7 @@ function glp() {
 }
 
 function gd() {
-  if [[ -z $1 ]] then
+  if [[ -z $1 ]]; then
     git diff --color | diff-so-fancy
   else
     git diff --color $1 | diff-so-fancy
@@ -250,7 +320,7 @@ function gd() {
 }
 
 function gdc() {
-  if [[ -z $1 ]] then
+  if [[ -z $1 ]]; then
     git diff --color --cached | diff-so-fancy
   else
     git diff --color --cached $1 | diff-so-fancy
@@ -295,7 +365,7 @@ function dir() {
 # ────────────────────────────────────────────────────────────────────────────────
 
 function clone() {
-  if [[ -z $2 ]] then
+  if [[ -z $2 ]]; then
     hub clone "$@" && cd "$(basename "$1" .git)"
   else
     hub clone "$@" && cd "$2"
@@ -324,7 +394,7 @@ function coded() {
 }
 
 function serve() {
-  if [[ -z $1 ]] then
+  if [[ -z $1 ]]; then
     live-server dist
   else
     live-server $1
