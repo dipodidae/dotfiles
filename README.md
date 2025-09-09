@@ -2,12 +2,12 @@
 
 Minimal, fast setup for a productive Zsh + Node.js development shell.
 
-### Install (one-liner)
+### Quick Install
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh | bash
 ```
 
-### Core goodies
+### What's included
 - Zsh + Oh My Zsh + pure prompt
 - Plugins: autosuggestions, syntax highlighting, z (jump)
 - NVM + Node LTS + pnpm + universal ni aliases
@@ -26,14 +26,16 @@ cd dotfiles && ./install.sh
 ```
 
 ### After install
-Type: help
+Type `help` to see all available commands.
 
-Common:
-  d <name>      jump to ~/development/<name>
-  proj          fuzzy switch project
-  commit        smart commit msg
-  gp            git push
-  ni / nr / nx  install / run / exec
+**Common commands:**
+```bash
+d <name>      # jump to ~/development/<name>
+proj          # fuzzy switch project
+commit        # smart commit msg
+gp            # git push
+ni / nr / nx  # install / run / exec
+```
 
 ### Update .zshrc quickly
 ```bash
@@ -43,9 +45,9 @@ source ~/.zshrc
 ```
 
 ### Troubleshoot
-Log: ~/.dotfiles-install.log
-Reload: source ~/.zshrc
-Check shell: echo $SHELL
+- **Log:** `~/.dotfiles-install.log`
+- **Reload:** `source ~/.zshrc`
+- **Check shell:** `echo $SHELL`
 
 ### License
 MIT

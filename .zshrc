@@ -88,9 +88,6 @@ alias re="nr release"
 # GIT CONFIGURATION & ALIASES
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Use github/hub
-alias git=hub
-
 # Go to project root
 alias grt='cd "$(git rev-parse --show-toplevel)"'
 
@@ -366,9 +363,9 @@ function dir() {
 
 function clone() {
   if [[ -z $2 ]]; then
-    hub clone "$@" && cd "$(basename "$1" .git)"
+    gh repo clone "$@" && cd "$(basename "$1" .git)"
   else
-    hub clone "$@" && cd "$2"
+    gh repo clone "$@" && cd "$2"
   fi
 }
 
@@ -447,7 +444,10 @@ export PYENV_ROOT="$HOME/.pyenv"
 export PATH="$PYENV_ROOT/bin:$PATH"
 eval "$(pyenv init --path)"
 eval "$(pyenv init -)"
-eval "$(pyenv virtualenv-init -)"
+# Only initialize pyenv virtualenv if available (fixes WSL error)
+if command -v pyenv-virtualenv >/dev/null 2>&1 || pyenv commands | grep -q virtualenv; then
+  eval "$(pyenv virtualenv-init -)"
+fi
 
 # ASDF version manager
 ## <SPEND_CLOUD_ASDF>
@@ -479,4 +479,28 @@ function help() {
     cat "$help_file"
   fi
 }
+
+# ────────────────────────────────────────────────────────────────────────────────
+# WSL & COMPLETION FIXES
+# ────────────────────────────────────────────────────────────────────────────────
+
+# Fix docker completion errors in WSL/environments where docker completions are missing
+# This prevents the "compinit:527: no such file or directory: /usr/share/zsh/vendor-completions/_docker" error
+if [[ -d "/usr/share/zsh/vendor-completions" ]]; then
+  # Remove any broken docker completion symlinks/files that cause errors
+  for comp_file in /usr/share/zsh/vendor-completions/_docker*; do
+    if [[ -L "$comp_file" && ! -e "$comp_file" ]]; then
+      # It's a broken symlink, try to remove it (if we have permission)
+      sudo rm -f "$comp_file" 2>/dev/null || true
+    fi
+  done
+fi
+
+# Alternative: Skip missing completions gracefully
+# This ensures compinit doesn't fail on missing completion files
+setopt COMPLETE_IN_WORD
+setopt ALWAYS_TO_END
+zstyle ':completion:*' completer _complete _match _approximate
+zstyle ':completion:*:match:*' original only
+zstyle ':completion:*:approximate:*' max-errors 1 numeric
 

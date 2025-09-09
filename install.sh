@@ -242,23 +242,18 @@ install_github_cli() {
     case "$OS_TYPE" in
         "debian")
             print_step "Setting up GitHub CLI repository for Debian/Ubuntu..."
-            if ! command_exists wget; then
-                sudo apt update && sudo apt install wget -y
-            fi
-            sudo mkdir -p -m 755 /etc/apt/keyrings
-            local temp_keyring
-            temp_keyring=$(mktemp)
-            if wget -nv -O"$temp_keyring" https://cli.github.com/packages/githubcli-archive-keyring.gpg; then
-                sudo cat "$temp_keyring" | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
-                sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-                rm -f "$temp_keyring"
-            else
-                print_error "Failed to download GitHub CLI signing key"
-                return 1
-            fi
-            sudo mkdir -p -m 755 /etc/apt/sources.list.d
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            if sudo apt update && sudo apt install gh -y; then
+            # Use official GitHub CLI installation method
+            (type -p wget >/dev/null || (sudo apt update && sudo apt install wget -y)) \
+                && sudo mkdir -p -m 755 /etc/apt/keyrings \
+                && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+                && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+                && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+                && sudo mkdir -p -m 755 /etc/apt/sources.list.d \
+                && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+                && sudo apt update \
+                && sudo apt install gh -y
+            
+            if command_exists gh; then
                 print_success "GitHub CLI installed successfully"
             else
                 print_error "Failed to install GitHub CLI"
@@ -577,65 +572,6 @@ install_development_tools() {
         else
             print_info "Skipping Homebrew, already installed"
         fi
-    fi
-
-    # Install Hub (GitHub CLI wrapper)
-    if ! command_exists hub; then
-        # hub is deprecated and not supported on Linux arm64 via bottles; prefer gh
-        local arch
-        arch="$(uname -m)"
-        if [[ "$arch" == "aarch64" || "$arch" == "arm64" ]] && [[ "$OS_TYPE" != "macos" ]]; then
-            print_info "Skipping hub on ${arch} Linux (deprecated/no arm64 support). Using gh instead."
-            if command_exists gh; then
-                if ! grep -qE '(^|[[:space:]])alias[[:space:]]+hub=' "$HOME/.zshrc" 2>/dev/null; then
-                    echo "alias hub='gh'" >> "$HOME/.zshrc"
-                    print_info "Added alias: hub -> gh in .zshrc"
-                fi
-            fi
-        else
-            print_step "Installing Hub (GitHub CLI wrapper)..."
-            case "$OS_TYPE" in
-                "debian")
-                    if command_exists brew; then
-                        if brew install hub || brew install --build-from-source hub; then :; else print_warning "Failed to install hub via Homebrew"; fi
-                        elif command_exists apt; then
-                        if sudo apt update && sudo apt install -y hub; then :; else print_warning "Failed to install hub via apt"; fi
-                    fi
-                ;;
-                "redhat")
-                    if command_exists brew; then
-                        if brew install hub || brew install --build-from-source hub; then :; else print_warning "Failed to install hub via Homebrew"; fi
-                        elif command_exists dnf; then
-                        if sudo dnf install -y hub; then :; else print_warning "Failed to install hub via dnf"; fi
-                        elif command_exists yum; then
-                        if sudo yum install -y hub; then :; else print_warning "Failed to install hub via yum"; fi
-                    fi
-                ;;
-                "arch")
-                    if sudo pacman -S --noconfirm hub; then :; else print_warning "Failed to install hub via pacman"; fi
-                ;;
-                "macos")
-                    if brew install hub || brew install --build-from-source hub; then :; else print_warning "Failed to install hub via Homebrew"; fi
-                ;;
-                *)
-                    print_warning "Cannot install hub automatically on this system"
-                ;;
-            esac
-
-            if command_exists hub; then
-                print_success "Hub installed successfully"
-            else
-                print_warning "Hub not installed; gh is installed and recommended"
-                if command_exists gh; then
-                    if ! grep -qE '(^|[[:space:]])alias[[:space:]]+hub=' "$HOME/.zshrc" 2>/dev/null; then
-                        echo "alias hub='gh'" >> "$HOME/.zshrc"
-                        print_info "Added alias: hub -> gh in .zshrc"
-                    fi
-                fi
-            fi
-        fi
-    else
-        print_info "Skipping Hub, already installed"
     fi
 
     # Install FZF (Fuzzy Finder)
@@ -1188,7 +1124,6 @@ gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/yum.repos.d/charm.repo
     print_step "Verifying development tools installation..."
     echo ""
     print_info "🛠️ Development tools status:"
-    command_exists hub && echo "  ✓ hub $(hub --version | head -n1)" || echo "  ❌ hub (not available)"
     command_exists fzf && echo "  ✓ fzf $(fzf --version)" || echo "  ❌ fzf (not available)"
     command_exists fd && echo "  ✓ fd $(fd --version | head -n1)" || echo "  ○ fd (not available - fzf will use find)"
     command_exists bat && echo "  ✓ bat $(bat --version | head -n1)" || echo "  ○ bat (not available - fzf will use cat)"
@@ -1223,15 +1158,32 @@ gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/yum.repos.d/charm.repo
 apply_dotfiles() {
     print_header "📁 APPLYING DOTFILES CONFIGURATION"
 
+    # ENFORCE: Always ensure we have a valid HOME directory
+    # The .zshrc file MUST go to the user's home directory, regardless of where this script is run from
+    if [[ -z "$HOME" ]]; then
+        print_error "HOME environment variable is not set. Cannot determine user home directory."
+        return 1
+    fi
+    
+    if [[ ! -d "$HOME" ]]; then
+        print_error "Home directory '$HOME' does not exist or is not accessible."
+        return 1
+    fi
+    
+    print_info "Target directory: $HOME (user home directory)"
+    print_info "Installing dotfiles to user home, regardless of script location"
+
     if is_remote_install; then
-        # REMOTE INSTALL: Download from GitHub
+        # REMOTE INSTALL: Download from GitHub and place directly in HOME
+        # This ensures .zshrc always goes to the user's home directory ($HOME/.zshrc)
         print_step "Downloading latest .zshrc from GitHub..."
         local temp_file
         temp_file=$(mktemp)
 
         if download_file ".zshrc" "$temp_file"; then
             print_step "Applying .zshrc configuration..."
-            # HARD OVERWRITE - always replace existing file
+            # ENFORCE: Always copy to $HOME/.zshrc (user's home directory)
+            # This is explicit and dumb - we don't care where the script runs from
             if cp "$temp_file" "$HOME/.zshrc"; then
                 print_success "✅ .zshrc downloaded and applied (overwritten)"
             else
@@ -1253,6 +1205,7 @@ apply_dotfiles() {
 
         if download_file ".zshrc.help.md" "$help_temp_file"; then
             print_step "Applying help file..."
+            # ENFORCE: Always place help file in $HOME (user's home directory)
             if cp "$help_temp_file" "$HOME/.zshrc.help.md"; then
                 print_success "✅ .zshrc.help.md downloaded and applied"
             else
@@ -1267,16 +1220,18 @@ apply_dotfiles() {
             return 1
         fi
     else
-        # LOCAL INSTALL: Create symlinks to local dotfiles repo
+        # LOCAL INSTALL: Create symlinks from HOME to local dotfiles repo
+        # This ensures .zshrc is always accessible from the user's home directory
         print_step "Creating symlinks to local dotfiles repository..."
 
-        # Handle .zshrc
+        # Handle .zshrc - ENFORCE: Always symlink from $HOME/.zshrc to local repo
         if [[ -f "$SCRIPT_DIR/.zshrc" ]]; then
             backup_file "$HOME/.zshrc"
             if [[ -L "$HOME/.zshrc" ]]; then
                 rm "$HOME/.zshrc"
                 print_info "Removed existing .zshrc symlink"
             fi
+            # ENFORCE: Always create symlink in $HOME (user's home directory)
             if ln -sf "$SCRIPT_DIR/.zshrc" "$HOME/.zshrc"; then
                 print_success "✅ .zshrc symlinked to local repository"
             else
@@ -1288,13 +1243,14 @@ apply_dotfiles() {
             return 1
         fi
 
-        # Handle .zshrc.help.md
+        # Handle .zshrc.help.md - ENFORCE: Always place in $HOME
         if [[ -f "$SCRIPT_DIR/.zshrc.help.md" ]]; then
             backup_file "$HOME/.zshrc.help.md"
             if [[ -L "$HOME/.zshrc.help.md" ]]; then
                 rm "$HOME/.zshrc.help.md"
                 print_info "Removed existing .zshrc.help.md symlink"
             fi
+            # ENFORCE: Always create symlink in $HOME (user's home directory)
             if ln -sf "$SCRIPT_DIR/.zshrc.help.md" "$HOME/.zshrc.help.md"; then
                 print_success "✅ .zshrc.help.md symlinked to local repository"
             else
@@ -1345,7 +1301,7 @@ display_summary() {
     echo -e "   • GitHub CLI (gh)"
     echo -e "   • Modern fzf with shell integration (CTRL-T, CTRL-R, ALT-C)"
     echo -e "   • Enhanced fzf tools (fd, bat, tree)"
-    echo -e "   • Development tools (hub, diff-so-fancy, pyenv, live-server)"
+    echo -e "   • Development tools (gh, diff-so-fancy, pyenv, live-server)"
     echo -e "   • Glow markdown renderer (for help system)"
     echo -e "   • Custom .zshrc configuration with help system"
     echo ""
