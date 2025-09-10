@@ -312,6 +312,19 @@ install_nvm_node() {
     export NVM_DIR="$HOME/.nvm"
     load_nvm
     if have nvm; then
+        # Helper with retry to make Node downloads more robust (network flakes, proxy, etc.)
+        nvm_install_lts() {
+            local attempt=1 max=3 rc=0
+            while (( attempt <= max )); do
+                step "Installing/Updating Node LTS (attempt $attempt/$max)"
+                if run nvm install --lts; then return 0; fi
+                rc=$?
+                warn "Node LTS install attempt $attempt failed (rc=$rc)"
+                sleep 2
+                ((attempt++))
+            done
+            return "$rc"
+        }
         # Safely determine current active Node version and latest LTS
         set +u
         local current_node remote_lts
@@ -320,24 +333,30 @@ install_nvm_node() {
         set -u
 
         if [[ -z "${current_node}" ]]; then
-            step "Installing Node LTS"
-            run nvm install --lts
-            run nvm use --lts >/dev/null || true
-            success "Node $(node --version 2>/dev/null || echo '?')"
+            if nvm_install_lts; then
+                run nvm use --lts >/dev/null || true
+                success "Node $(node --version 2>/dev/null || echo '?')"
+            else
+                warn "Failed to install Node LTS after retries"
+            fi
         else
             if [[ -n "$remote_lts" && "$current_node" == "$remote_lts" ]]; then
                 note "Node LTS v$current_node already active"
             else
                 if [[ -n "$remote_lts" ]]; then
-                    step "Updating Node LTS to v$remote_lts"
-                    run nvm install --lts
-                    run nvm use --lts >/dev/null || true
-                    success "Node updated to $(node --version 2>/dev/null || echo '?')"
+                    if nvm_install_lts; then
+                        run nvm use --lts >/dev/null || true
+                        success "Node updated to $(node --version 2>/dev/null || echo '?')"
+                    else
+                        warn "Node LTS update failed after retries (current: ${current_node:-none})"
+                    fi
                 else
-                    step "Ensuring Node LTS (remote LTS not resolved)"
-                    run nvm install --lts
-                    run nvm use --lts >/dev/null || true
-                    success "Node $(node --version 2>/dev/null || echo '?')"
+                    if nvm_install_lts; then
+                        run nvm use --lts >/dev/null || true
+                        success "Node $(node --version 2>/dev/null || echo '?')"
+                    else
+                        warn "Node LTS install failed (remote LTS unresolved)"
+                    fi
                 fi
             fi
         fi
@@ -375,7 +394,30 @@ install_dev_extras() {
         debian)
             ensure_pkgs "fzf stack" fzf fd-find bat tree
             if have fdfind && ! grep -q 'alias fd=' "$HOME/.zshrc" 2>/dev/null; then echo 'alias fd=fdfind' >>"$HOME/.zshrc"; fi
-            if ! have bat && have batcat && ! grep -q 'alias bat=' "$HOME/.zshrc" 2>/dev/null; then echo 'alias bat=batcat' >>"$HOME/.zshrc"; fi
+            # Provide "bat" even when Debian names binary batcat (prefer symlink over alias per upstream docs)
+            if ! have bat && have batcat; then
+                step "Creating bat symlink for batcat"
+                run mkdir -p "$HOME/.local/bin"
+                if [[ "$DRY_RUN" == 1 ]]; then
+                    note "(dry-run) ln -s /usr/bin/batcat $HOME/.local/bin/bat"
+                else
+                    if [[ ! -e "$HOME/.local/bin/bat" ]]; then
+                        ln -s /usr/bin/batcat "$HOME/.local/bin/bat" || warn "Failed to create bat symlink"
+                    fi
+                fi
+                # shellcheck disable=SC2016 # we intentionally want literal $PATH in export line added to .zshrc
+                case ":$PATH:" in
+                    *":$HOME/.local/bin:"*) : ;;
+                    *) echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"; note "Added ~/.local/bin to PATH" ;;
+                esac
+                if have bat; then
+                    success "bat available"
+                else
+                    # Fallback alias if still not detected in current shell session
+                    echo 'alias bat=batcat' >>"$HOME/.zshrc"
+                    warn "bat symlink not yet in PATH for current session; alias added"
+                fi
+            fi
             ;;
         redhat) ensure_pkgs "fzf stack" fzf bat tree fd-find ;;
         arch) ensure_pkgs "fzf stack" fzf bat tree fd ;;
@@ -385,7 +427,65 @@ install_dev_extras() {
     # glow
     if ! have glow; then
         case "$OS_TYPE" in
-            debian) step glow; pkg_install glow || warn "glow skipped" ;;
+            debian)
+                step "Prepare glow (Charm repo)"
+                # Add Charm repo if missing
+                if [[ ! -f /etc/apt/keyrings/charm.gpg ]]; then
+                    run sudo mkdir -p /etc/apt/keyrings
+                    if run bash -c 'curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg'; then
+                        success "Charm GPG key added"
+                    else
+                        warn "Failed to add Charm GPG key"
+                    fi
+                fi
+                if [[ ! -f /etc/apt/sources.list.d/charm.list ]]; then
+                    if run bash -c 'echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list >/dev/null'; then
+                        success "Charm apt repo added"
+                    else
+                        warn "Failed to write Charm repo list"
+                    fi
+                fi
+                # Force apt update since new repo may have been added
+                if run sudo apt-get update -y; then :; else warn "apt update failed for glow repo"; fi
+                if pkg_install glow; then
+                    success "glow installed"
+                else
+                    warn "glow install failed via repo; attempting fallback binary"
+                    local glow_version="1.5.1"
+                    local arch
+                    arch="$(uname -m)"
+                    local glow_arch=""
+                    local tmpd
+                    case "$arch" in
+                        x86_64|amd64) glow_arch=amd64 ;;
+                        aarch64|arm64) glow_arch=arm64 ;;
+                        *) warn "Unsupported arch for glow fallback ($arch)"; glow_arch="" ;;
+                    esac
+                    if [[ -n "$glow_arch" ]]; then
+                        tmpd="$(mktemp -d)" || true
+                        if [[ -n "$tmpd" ]]; then
+                            local tar="glow_${glow_version}_linux_${glow_arch}.tar.gz"
+                            local url="https://github.com/charmbracelet/glow/releases/download/v${glow_version}/${tar}"
+                            step "Downloading glow fallback $glow_version"
+                            if run curl -fsSL "$url" -o "$tmpd/$tar" && run tar -xzf "$tmpd/$tar" -C "$tmpd" glow; then
+                                if [[ -w /usr/local/bin ]]; then
+                                    run install -m 0755 "$tmpd/glow" /usr/local/bin/glow || true
+                                else
+                                    mkdir -p "$HOME/.local/bin"
+                                    run install -m 0755 "$tmpd/glow" "$HOME/.local/bin/glow" || true
+                                    case ":$PATH:" in
+                                        *":$HOME/.local/bin:"*) : ;;
+                                        *) note "Add $HOME/.local/bin to PATH for glow" ;;
+                                    esac
+                                fi
+                                if have glow; then success "glow (fallback)"; else warn "glow fallback present but not in PATH"; fi
+                            else
+                                warn "glow fallback download failed"
+                            fi
+                        fi
+                    fi
+                fi
+                ;;
             arch) pkg_install glow ;;
             macos) pkg_install glow ;;
             redhat) pkg_install glow || warn "glow skipped" ;;
