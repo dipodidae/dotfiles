@@ -393,7 +393,24 @@ install_dev_extras() {
     case "$OS_TYPE" in
         debian)
             ensure_pkgs "fzf stack" fzf fd-find bat tree
-            if have fdfind && ! grep -q 'alias fd=' "$HOME/.zshrc" 2>/dev/null; then echo 'alias fd=fdfind' >>"$HOME/.zshrc"; fi
+            # Provide canonical 'fd' command (Debian names binary 'fdfind')
+            if have fdfind && ! have fd; then
+                step "Creating fd symlink for fdfind"
+                run mkdir -p "$HOME/.local/bin"
+                if [[ "$DRY_RUN" == 1 ]]; then
+                    note "(dry-run) ln -s $(command -v fdfind) $HOME/.local/bin/fd"
+                else
+                    if [[ ! -e "$HOME/.local/bin/fd" ]]; then
+                        ln -s "$(command -v fdfind)" "$HOME/.local/bin/fd" || warn "Failed to create fd symlink"
+                    fi
+                fi
+                # shellcheck disable=SC2016
+                case ":$PATH:" in
+                    *":$HOME/.local/bin:"*) : ;;
+                    *) echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"; note "Added ~/.local/bin to PATH" ;;
+                esac
+                if have fd; then success "fd available"; else warn "fd symlink not yet in PATH for current session"; fi
+            fi
             # Provide "bat" even when Debian names binary batcat (prefer symlink over alias per upstream docs)
             if ! have bat && have batcat; then
                 step "Creating bat symlink for batcat"
