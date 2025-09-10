@@ -90,6 +90,17 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 remote_install() { [[ ! -d "$SCRIPT_DIR/.git" ]]; }
 
+# Safely load nvm under set -u (nvm uses unbound vars internally)
+load_nvm() {
+    if [[ -z "${NVM_DIR:-}" ]]; then return 0; fi
+    if [[ -s "$NVM_DIR/nvm.sh" ]]; then
+        # shellcheck disable=SC1091
+        set +u
+        . "$NVM_DIR/nvm.sh"
+        set -u
+    fi
+}
+
 download() { # download <remote-path> <dest>
     local src="$DOTFILES_RAW/$1" dest="$2"; local tries=0
     if [[ "$DRY_RUN" == 1 ]]; then
@@ -267,15 +278,38 @@ install_nvm_node() {
     else
         note "NVM already present"
     fi
-    export NVM_DIR="$HOME/.nvm"; # shellcheck disable=SC1091
-    [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
+    export NVM_DIR="$HOME/.nvm"
+    load_nvm
     if have nvm; then
-        if ! have node; then
+        # Safely determine current active Node version and latest LTS
+        set +u
+        local current_node remote_lts
+        current_node="$(node --version 2>/dev/null | sed 's/^v//')"
+        remote_lts="$(nvm version-remote --lts 2>/dev/null | sed 's/^v//')"
+        set -u
+
+        if [[ -z "${current_node}" ]]; then
             step "Installing Node LTS"
             run nvm install --lts
+            run nvm use --lts >/dev/null || true
+            success "Node $(node --version 2>/dev/null || echo '?')"
+        else
+            if [[ -n "$remote_lts" && "$current_node" == "$remote_lts" ]]; then
+                note "Node LTS v$current_node already active"
+            else
+                if [[ -n "$remote_lts" ]]; then
+                    step "Updating Node LTS to v$remote_lts"
+                    run nvm install --lts
+                    run nvm use --lts >/dev/null || true
+                    success "Node updated to $(node --version 2>/dev/null || echo '?')"
+                else
+                    step "Ensuring Node LTS (remote LTS not resolved)"
+                    run nvm install --lts
+                    run nvm use --lts >/dev/null || true
+                    success "Node $(node --version 2>/dev/null || echo '?')"
+                fi
+            fi
         fi
-        run nvm use --lts >/dev/null || true
-        success "Node $(node --version 2>/dev/null || echo '?')"
     else
         warn "nvm not available"
     fi
