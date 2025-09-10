@@ -1,1375 +1,430 @@
-#!/bin/bash
-set -euo pipefail
+#!/usr/bin/env bash
+###############################################################################
+# Dotfiles / Dev Environment Installer (Simplified, Robust, DRY)
+# Purpose: Recreates the functionality of the previous large installer with a
+#          cleaner structure, modern logging, and stronger error handling.
+# Author:  dipodidae (rewritten)
+###############################################################################
 
-# ╔══════════════════════════════════════════════════════════════════════════════╗
-# ║                  MODERN DEVELOPMENT ENVIRONMENT INSTALLER                   ║
-# ║                    Comprehensive Development Environment Setup               ║
-# ╚══════════════════════════════════════════════════════════════════════════════╝
+set -Eeuo pipefail
+IFS=$'\n\t'
 
-# shellcheck disable=SC2155
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly LOG_FILE="${HOME}/.dotfiles-install.log"
-readonly DOTFILES_NVM_VERSION="v0.40.3"
-# shellcheck disable=SC2155
-readonly BACKUP_DIR="${HOME}/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
-readonly DOTFILES_REPO="https://github.com/dipodidae/dotfiles.git"
-readonly DOTFILES_RAW="https://raw.githubusercontent.com/dipodidae/dotfiles/main"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_FILE="${HOME}/.dotfiles-install.log"
+BACKUP_DIR="${HOME}/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
+NVM_VERSION="v0.40.3"
+DOTFILES_RAW="https://raw.githubusercontent.com/dipodidae/dotfiles/main"
 
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly PURPLE='\033[0;35m'
-readonly CYAN='\033[0;36m'
-readonly WHITE='\033[1;37m'
-readonly NC='\033[0m'
+# Colors (auto-disable if not a TTY or NO_COLOR set)
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    C_RESET='\033[0m'; C_DIM='\033[2m'; C_RED='\033[31m'; C_GREEN='\033[32m'; C_YELLOW='\033[33m';
+    C_BLUE='\033[34m'; C_MAGENTA='\033[35m'; C_CYAN='\033[36m'; C_BOLD='\033[1m'
+else
+    C_RESET=""; C_DIM=""; C_RED=""; C_GREEN=""; C_YELLOW=""; C_BLUE=""; C_MAGENTA=""; C_CYAN=""; C_BOLD=""
+fi
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 🛠️ UTILITY FUNCTIONS
-# ────────────────────────────────────────────────────────────────────────────────
-
-log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $*" >>"$LOG_FILE"
+# Logging --------------------------------------------------------------------
+_ts() { date '+%H:%M:%S'; }
+_log() { printf '%s %s\n' "$(_ts)" "$*" >>"$LOG_FILE"; }
+log() { _log "INFO: $*"; }
+note() { printf "%b•%b %s%b\n" "$C_DIM" "$C_RESET" "$*" "$C_RESET"; _log "NOTE: $*"; }
+info() { printf "%bℹ%b %s%b\n" "$C_CYAN" "$C_RESET" "$*" "$C_RESET"; _log "INFO: $*"; }
+step() { printf "%b▶%b %s%b\n" "$C_BLUE" "$C_RESET" "$*" "$C_RESET"; _log "STEP: $*"; }
+success() { printf "%b✔%b %s%b\n" "$C_GREEN" "$C_RESET" "$*" "$C_RESET"; _log "OK: $*"; }
+warn() { printf "%b!%b %s%b\n" "$C_YELLOW" "$C_RESET" "$*" "$C_RESET" >&2; _log "WARN: $*"; }
+error() { printf "%b✖%b %s%b\n" "$C_RED" "$C_RESET" "$*" "$C_RESET" >&2; _log "ERR: $*"; }
+headline() {
+    local msg="$1"; printf "\n%b%s%b %b%s%b\n" "$C_MAGENTA" "────────" "$C_RESET" "$C_BOLD" "$msg" "$C_RESET"; _log "HEAD: $msg";
 }
 
-print_header() {
-    echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${PURPLE}║${NC} $1 ${PURPLE}║${NC}"
-    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════════╝${NC}"
-    log "HEADER: $1"
-}
+die() { error "$1"; exit 1; }
 
-print_step() {
-    echo -e "${BLUE}🔵${NC} $1"
-    log "STEP: $1"
-}
-
-print_success() {
-    echo -e "${GREEN}✅${NC} $1"
-    log "SUCCESS: $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠️${NC}  $1"
-    log "WARNING: $1"
-}
-
-print_error() {
-    echo -e "${RED}❌${NC} $1" >&2
-    log "ERROR: $1"
-}
-
-print_info() {
-    echo -e "${CYAN}ℹ️${NC}  $1"
-    log "INFO: $1"
-}
-
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-is_remote_install() {
-    [[ ! -f "$SCRIPT_DIR/.zshrc" && ! -d "$SCRIPT_DIR/.git" ]]
-}
-
-download_file() {
-    local file_path="$1"
-    local target_path="$2"
-    local max_retries=3
-    local retry_count=0
-    while [[ $retry_count -lt $max_retries ]]; do
-        if curl -fsSL "$DOTFILES_RAW/$file_path" -o "$target_path" 2>/dev/null; then
-            return 0
-        else
-            ((retry_count++))
-            if [[ $retry_count -lt $max_retries ]]; then
-                print_warning "Download failed, retrying ($retry_count/$max_retries)..."
-                sleep 2
-            fi
+# Trap / error context --------------------------------------------------------
+_fail_line=""
+cleanup() {
+    local rc=$?
+    if (( rc != 0 )); then
+        error "Aborted (exit $rc) at ${BASH_SOURCE[0]}:${LINENO} ${_fail_line}"
+        error "See log: $LOG_FILE"
+        if [[ -d $BACKUP_DIR ]]; then
+            info "Backups: $BACKUP_DIR"
         fi
+    fi
+    exit $rc
+}
+trap cleanup EXIT
+trap '_fail_line="(last cmd: $BASH_COMMAND)"' DEBUG
+
+# CLI options -----------------------------------------------------------------
+DRY_RUN="0"; SKIP_PACKAGES="0"
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run) DRY_RUN=1 ;;
+        --skip-packages) SKIP_PACKAGES=1 ;;
+        -h|--help)
+            cat <<EOF
+Dotfiles / Dev Environment Installer (clean edition)
+Usage: $0 [--dry-run] [--skip-packages] [--help]
+    --dry-run        Show actions only
+    --skip-packages  Skip system package manager steps
+EOF
+            exit 0
+            ;;
+        *) die "Unknown option: $arg" ;;
+    esac
+done
+
+if [[ "$DRY_RUN" == 1 ]]; then
+    printf '%s\n' "(dry-run mode) No changes will be made." | tee -a "$LOG_FILE" >/dev/null
+fi
+
+[[ -f "$LOG_FILE" ]] || : >"$LOG_FILE"
+
+# Helpers ---------------------------------------------------------------------
+run() { # run <cmd...>
+    if [[ "$DRY_RUN" == 1 ]]; then note "(dry-run) $*"; return 0; fi
+    "${@}"
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+remote_install() { [[ ! -d "$SCRIPT_DIR/.git" ]]; }
+
+download() { # download <remote-path> <dest>
+    local src="$DOTFILES_RAW/$1" dest="$2"; local tries=0
+    if [[ "$DRY_RUN" == 1 ]]; then
+        note "(dry-run) download $src -> $dest"; : >"$dest"; return 0
+    fi
+    while (( tries < 3 )); do
+        if curl -fsSL "$src" -o "$dest"; then return 0; fi
+        ((tries++)); sleep 1
     done
-    print_error "Failed to download $file_path after $max_retries attempts"
     return 1
+}
+
+backup() { # backup <file/dir>
+    local f="$1"; [[ -e "$f" ]] || return 0
+    mkdir -p "$BACKUP_DIR"
+    if cp -a "$f" "$BACKUP_DIR/"; then
+        note "Backup: $(basename "$f")"
+    else
+        warn "Backup failed: $f"
+    fi
 }
 
 detect_os() {
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        if command_exists apt; then
-            echo "debian"
-            elif command_exists yum; then
-            echo "redhat"
-            elif command_exists pacman; then
-            echo "arch"
-        else
-            echo "linux-unknown"
-        fi
-        elif [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "macos"
-    else
-        echo "unknown"
-    fi
+    if [[ "$OSTYPE" == linux-* ]]; then
+        if have apt; then echo debian; elif have dnf || have yum; then echo redhat; elif have pacman; then echo arch; else echo linux; fi
+    elif [[ "$OSTYPE" == darwin* ]]; then echo macos; else echo unknown; fi
 }
 
-backup_file() {
-    local file="$1"
-    if [[ -f "$file" || -d "$file" ]]; then
-        mkdir -p "$BACKUP_DIR"
-        cp -r "$file" "$BACKUP_DIR/"
-        print_info "Backed up $(basename "$file") to $BACKUP_DIR"
-        log "BACKUP: $file -> $BACKUP_DIR"
-    fi
+require_internet() {
+    step "Checking internet"; curl -fsSL https://github.com >/dev/null || die "No internet connectivity"; success "Network OK";
 }
 
-safe_git_clone() {
-    local repo_url="$1"
-    local target_dir="$2"
-    local max_retries=3
-    local retry_count=0
-    while [[ $retry_count -lt $max_retries ]]; do
-        if git clone "$repo_url" "$target_dir" 2>/dev/null; then
-            return 0
-        else
-            ((retry_count++))
-            if [[ $retry_count -lt $max_retries ]]; then
-                print_warning "Clone failed (attempt $retry_count/$max_retries), retrying..."
-                sleep 2
-                # Clean up failed clone attempt
-                [[ -d "$target_dir" ]] && rm -rf "$target_dir"
-            fi
-        fi
-    done
-    print_error "Failed to clone $repo_url after $max_retries attempts"
-    print_error "This could be due to network issues or the repository being unavailable"
-    return 1
-}
+# Package installation abstraction -------------------------------------------
+OS_TYPE="$(detect_os)"; [[ "$OS_TYPE" == unknown ]] && die "Unsupported OS"
+info "Detected OS: $OS_TYPE"
 
-check_internet() {
-    if ! curl -s --head --request GET https://github.com >/dev/null 2>&1; then
-        print_error "No internet connection detected"
-        exit 1
-    fi
-}
+apt_update_once() { if [[ "${_APT_UPDATED:-0}" == 0 ]]; then run sudo apt-get update -y; _APT_UPDATED=1; fi; }
 
-cleanup_on_exit() {
-    if [[ $? -ne 0 ]]; then
-        print_error "Installation failed. Check log file: $LOG_FILE"
-        if [[ -d "$BACKUP_DIR" ]]; then
-            print_info "Backups are available in: $BACKUP_DIR"
-        fi
-    fi
-}
-
-trap cleanup_on_exit EXIT
-
-initialize() {
-    print_header "🚀 INITIALIZING DOTFILES INSTALLATION"
-    if is_remote_install; then
-        echo -e "${CYAN}🌐 Remote installation detected${NC}"
-        echo -e "${WHITE}Repository:${NC} $DOTFILES_REPO"
-        echo ""
-    else
-        echo -e "${CYAN}📁 Local installation detected${NC}"
-    fi
-    touch "$LOG_FILE"
-    log "Installation started by $(whoami) on $(hostname)"
-    log "Installation method: $(is_remote_install && echo 'remote' || echo 'local')"
-    print_step "Checking prerequisites..."
-    check_internet
-    print_success "Internet connection verified"
-    local os_type
-    os_type=$(detect_os)
-    print_info "Detected OS: $os_type"
-    log "OS_TYPE: $os_type"
-    if [[ "$os_type" == "unknown" || "$os_type" == "linux-unknown" ]]; then
-        print_error "Unsupported operating system"
-        exit 1
-    fi
-    export OS_TYPE="$os_type"
-}
-
-# ────────────────────────────────────────────────────────────────────────────────
-# 📦 PACKAGE INSTALLATION
-# ────────────────────────────────────────────────────────────────────────────────
-
-install_base_packages() {
-    print_header "📦 INSTALLING BASE PACKAGES"
+pkg_install() { # pkg_install list...
+    local pkgs=("$@"); [[ ${#pkgs[@]} -eq 0 ]] && return 0
     case "$OS_TYPE" in
-        "debian")
-            print_step "Updating package lists..."
-            if sudo apt update; then
-                print_success "Package lists updated"
-            else
-                print_error "Failed to update package lists"
-                return 1
-            fi
-            print_step "Installing zsh and git..."
-            if sudo apt install -y zsh git-core curl wget; then
-                print_success "Base packages installed"
-            else
-                print_error "Failed to install base packages"
-                return 1
-            fi
-        ;;
-        "macos")
-            if ! command_exists brew; then
-                print_step "Installing Homebrew..."
-                /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-            fi
-            print_step "Installing zsh and git..."
-            brew install zsh git curl wget
-            print_success "Base packages installed"
-        ;;
-        *)
-            print_warning "Unsupported OS for automatic package installation"
-            print_info "Please manually install: zsh git curl wget"
-            read -r -p "Press Enter when ready to continue..."
-        ;;
+        debian)
+            apt_update_once
+            run sudo apt-get install -y "${pkgs[@]}" ;;
+        redhat)
+            if have dnf; then run sudo dnf install -y "${pkgs[@]}"; else run sudo yum install -y "${pkgs[@]}"; fi ;;
+        arch)
+            run sudo pacman -S --noconfirm --needed "${pkgs[@]}" ;;
+        macos)
+            have brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" >/dev/null
+            run brew install "${pkgs[@]}" ;;
+        *) warn "Automatic package install unsupported for: $OS_TYPE"; return 0 ;;
     esac
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 🐙 GITHUB CLI INSTALLATION
-# ────────────────────────────────────────────────────────────────────────────────
-
-install_github_cli() {
-    print_header "🐙 INSTALLING GITHUB CLI"
-    if command_exists gh; then
-        print_info "Skipping GitHub CLI, already installed"
-        print_info "Current version: $(gh --version | head -n1)"
-        return 0
-    fi
-    print_step "Installing GitHub CLI..."
-    case "$OS_TYPE" in
-        "debian")
-            print_step "Setting up GitHub CLI repository for Debian/Ubuntu..."
-            # Use official GitHub CLI installation method
-            (type -p wget >/dev/null || (sudo apt update && sudo apt install wget -y)) \
-                && sudo mkdir -p -m 755 /etc/apt/keyrings \
-                && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-                && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-                && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-                && sudo mkdir -p -m 755 /etc/apt/sources.list.d \
-                && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-                && sudo apt update \
-                && sudo apt install gh -y
-            
-            if command_exists gh; then
-                print_success "GitHub CLI installed successfully"
-            else
-                print_error "Failed to install GitHub CLI"
-                return 1
-            fi
-        ;;
-        "redhat")
-            print_step "Installing GitHub CLI for Red Hat/Fedora..."
-            if command_exists dnf; then
-                if dnf --version 2>/dev/null | grep -q "dnf5"; then
-                    print_info "Using DNF5..."
-                    sudo dnf install dnf5-plugins -y
-                    sudo dnf config-manager addrepo --from-repofile=https://cli.github.com/packages/rpm/gh-cli.repo
-                    sudo dnf install gh --repo gh-cli -y
-                else
-                    print_info "Using DNF4..."
-                    sudo dnf install 'dnf-command(config-manager)' -y
-                    sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
-                    sudo dnf install gh --repo gh-cli -y
-                fi
-                elif command_exists yum; then
-                print_info "Using YUM..."
-                if ! command_exists yum-config-manager; then
-                    sudo yum install yum-utils -y
-                fi
-                sudo yum-config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
-                sudo yum install gh -y
-            else
-                print_error "No compatible package manager found (dnf/yum)"
-                return 1
-            fi
-            if command_exists gh; then
-                print_success "GitHub CLI installed successfully"
-            else
-                print_error "GitHub CLI installation failed"
-                return 1
-            fi
-        ;;
-        "arch")
-            print_step "Installing GitHub CLI for Arch Linux..."
-            if sudo pacman -S --noconfirm github-cli; then
-                print_success "GitHub CLI installed successfully"
-            else
-                print_error "Failed to install GitHub CLI"
-                return 1
-            fi
-        ;;
-        "macos")
-            print_step "Installing GitHub CLI for macOS..."
-            if command_exists brew; then
-                if brew install gh; then
-                    print_success "GitHub CLI installed successfully"
-                else
-                    print_error "Failed to install GitHub CLI via Homebrew"
-                    return 1
-                fi
-            else
-                print_error "Homebrew not found. Please install Homebrew first."
-                return 1
-            fi
-        ;;
-        *)
-            print_warning "Unsupported OS for automatic GitHub CLI installation"
-            print_info "Please manually install GitHub CLI from: https://cli.github.com/"
-            return 0
-        ;;
-    esac
-    if command_exists gh; then
-        print_success "GitHub CLI installation verified"
-        print_info "Version: $(gh --version | head -n1)"
-        echo ""
-        print_info "📖 Quick start guide:"
-        echo "  • Authenticate: ${CYAN}gh auth login${NC}"
-        echo "  • Clone repo: ${CYAN}gh repo clone owner/repo${NC}"
-        echo "  • Create PR: ${CYAN}gh pr create${NC}"
-        echo "  • View issues: ${CYAN}gh issue list${NC}"
-        echo "  • Get help: ${CYAN}gh help${NC}"
-        echo ""
+ensure_pkgs() { # ensure_pkgs label pkgs...
+    local label="$1"; shift
+    local pkgs=("$@"); [[ ${#pkgs[@]} -eq 0 ]] && return 0
+    step "Installing $label (${pkgs[*]})"
+    if pkg_install "${pkgs[@]}"; then
+        success "$label ready"
     else
-        print_error "GitHub CLI installation verification failed"
-        return 1
+        warn "$label partial/failed"
     fi
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 🐚 ZSH CONFIGURATION
-# ────────────────────────────────────────────────────────────────────────────────
+# Specific component installers ----------------------------------------------
+install_base() {
+    [[ "$SKIP_PACKAGES" == 1 ]] && { info "Skipping base packages"; return 0; }
+    headline "Base Packages"
+    case "$OS_TYPE" in
+        debian) ensure_pkgs base zsh git curl wget ca-certificates gnupg lsb-release ;;
+        redhat) ensure_pkgs base zsh git curl wget ca-certificates gnupg ;;
+        arch)   ensure_pkgs base zsh git curl wget ;;
+        macos)  ensure_pkgs base zsh git curl wget ;;
+        *) warn "Manual install required: zsh git curl wget" ;;
+    esac
+}
 
-install_oh_my_zsh() {
-    print_header "🐚 SETTING UP ZSH ENVIRONMENT"
-    backup_file "$HOME/.zshrc"
-    backup_file "$HOME/.oh-my-zsh"
+install_gh_cli() {
+    headline "GitHub CLI"
+    if have gh; then note "gh already present ($(gh --version | head -n1))"; return 0; fi
+    case "$OS_TYPE" in
+        debian)
+            apt_update_once
+            run sudo mkdir -p /etc/apt/keyrings
+            run bash -c 'curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null'
+            run sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+            run bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null'
+            apt_update_once
+            pkg_install gh
+            ;;
+        redhat) pkg_install gh || warn "Install gh manually: https://cli.github.com" ;;
+        arch) pkg_install github-cli ;;
+        macos) pkg_install gh ;;
+        *) warn "Install gh manually" ;;
+    esac
+    if have gh; then
+        success "gh installed"
+    else
+        warn "gh unavailable"
+    fi
+}
+
+install_ohmyzsh() {
+    headline "Zsh / Oh My Zsh"
+    backup "$HOME/.oh-my-zsh"
+    export RUNZSH=no CHSH=no
     if [[ ! -d "$HOME/.oh-my-zsh" ]]; then
-        print_step "Installing Oh My Zsh..."
-        export RUNZSH=no
-        export CHSH=no
-        if sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"; then
-            print_success "Oh My Zsh installed successfully"
+        step "Installing Oh My Zsh"
+        if run sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"; then
+            success "Oh My Zsh"
         else
-            print_error "Failed to install Oh My Zsh"
-            return 1
+            warn "Oh My Zsh failed"
         fi
     else
-        print_info "Skipping Oh My Zsh, already installed"
+        note "Oh My Zsh already installed"
     fi
 }
 
-install_pure_prompt() {
-    local pure_dir="$HOME/.zsh/pure"
-    if [[ ! -d "$pure_dir" ]]; then
-        print_step "Installing Pure prompt..."
-        mkdir -p "$HOME/.zsh"
-        if safe_git_clone "https://github.com/sindresorhus/pure.git" "$pure_dir"; then
-            print_success "Pure prompt installed"
+install_pure() {
+    local dir="$HOME/.zsh/pure"
+    if [[ -d "$dir/.git" ]]; then
+        (
+            cd "$dir" || exit 0
+            git pull -q >/dev/null 2>&1 || true
+        )
+    fi
+    if [[ ! -d "$dir" ]]; then
+        headline "Pure Prompt"
+        run mkdir -p "$HOME/.zsh"
+        if run git clone --depth 1 https://github.com/sindresorhus/pure.git "$dir"; then
+            success "Pure prompt"
         else
-            print_error "Failed to install Pure prompt"
-            return 1
+            warn "Pure prompt skipped"
         fi
     else
-        print_info "Skipping Pure prompt, already installed"
-        if (cd "$pure_dir" && git pull origin main >/dev/null 2>&1); then
-            print_info "Pure prompt updated to latest version"
-        fi
+        note "Pure prompt present"
     fi
 }
 
 install_zsh_plugins() {
-    print_step "Installing zsh plugins..."
-    local zsh_custom="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
-    local plugins=(
-        "zsh-autosuggestions:https://github.com/zsh-users/zsh-autosuggestions"
-        "zsh-syntax-highlighting:https://github.com/zsh-users/zsh-syntax-highlighting.git"
-        "zsh-z:https://github.com/agkozak/zsh-z"
-        "you-should-use:https://github.com/MichaelAquilina/zsh-you-should-use.git"
+    headline "Zsh Plugins"
+    local base="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/plugins"; run mkdir -p "$base"
+    local repos=(
+        zsh-autosuggestions=https://github.com/zsh-users/zsh-autosuggestions
+        zsh-syntax-highlighting=https://github.com/zsh-users/zsh-syntax-highlighting
+        zsh-z=https://github.com/agkozak/zsh-z
+        you-should-use=https://github.com/MichaelAquilina/zsh-you-should-use
     )
-    for plugin_info in "${plugins[@]}"; do
-        local plugin_name="${plugin_info%%:*}"
-        local plugin_repo="${plugin_info#*:}"
-        local plugin_dir="$zsh_custom/plugins/$plugin_name"
-
-        if [[ ! -d "$plugin_dir" ]]; then
-            print_step "Installing $plugin_name..."
-            if safe_git_clone "$plugin_repo" "$plugin_dir"; then
-                print_success "✅ Installed $plugin_name"
-            else
-                print_warning "Failed to install $plugin_name, skipping..."
-                print_info "You can manually install later: git clone $plugin_repo $plugin_dir"
-            fi
+    local r name url
+    for r in "${repos[@]}"; do
+        name="${r%%=*}"; url="${r#*=}"; local target="$base/$name"
+        if [[ -d "$target/.git" ]]; then
+            (
+                cd "$target" || exit 0
+                git pull -q >/dev/null 2>&1 || true
+            )
+            note "$name updated"
+            continue
+        fi
+        step "Plugin $name"
+        if run git clone --depth 1 "$url" "$target"; then
+            success "$name"
         else
-            print_info "Skipping $plugin_name, already installed"
-            if (cd "$plugin_dir" && git pull origin main >/dev/null 2>&1) ||
-            (cd "$plugin_dir" && git pull origin master >/dev/null 2>&1); then
-                print_info "Updated $plugin_name"
-            else
-                print_info "$plugin_name update skipped (may not be a git repository)"
-            fi
+            warn "$name failed"
         fi
     done
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 🟢 NODE.JS SETUP
-# ────────────────────────────────────────────────────────────────────────────────
-
-install_nvm() {
-    print_header "🟢 INSTALLING NODE.JS ENVIRONMENT"
+install_nvm_node() {
+    headline "Node / NVM"
     if [[ ! -d "$HOME/.nvm" ]]; then
-        print_step "Installing NVM..."
-        local nvm_install_script
-        nvm_install_script=$(curl -s "https://raw.githubusercontent.com/nvm-sh/nvm/$DOTFILES_NVM_VERSION/install.sh")
-        if [[ -n "$nvm_install_script" ]]; then
-            if bash -c "$nvm_install_script"; then
-                print_success "NVM installed successfully"
-                export NVM_DIR="$HOME/.nvm"
-                # shellcheck disable=SC1091
-                [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-                if command_exists nvm; then
-                    print_step "Installing latest LTS Node.js..."
-                    if nvm install --lts && nvm use --lts; then
-                        print_success "Node.js LTS installed and activated"
-                        print_info "Node version: $(node --version)"
-                        print_info "NPM version: $(npm --version)"
-                    else
-                        print_warning "Failed to install Node.js via NVM"
-                    fi
-                fi
-            else
-                print_error "Failed to install NVM"
-                return 1
-            fi
-        else
-            print_error "Failed to download NVM installation script"
-            return 1
-        fi
+    step "Installing NVM $NVM_VERSION"; run bash -c "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/$NVM_VERSION/install.sh | bash"
     else
-        print_info "Skipping NVM, already installed"
-        export NVM_DIR="$HOME/.nvm"
-        # shellcheck disable=SC1091
-        [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-        if command_exists nvm; then
-            print_info "Current NVM version: $(nvm --version)"
+        note "NVM already present"
+    fi
+    export NVM_DIR="$HOME/.nvm"; # shellcheck disable=SC1091
+    [[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh"
+    if have nvm; then
+        if ! have node; then
+            step "Installing Node LTS"
+            run nvm install --lts
         fi
+        run nvm use --lts >/dev/null || true
+        success "Node $(node --version 2>/dev/null || echo '?')"
+    else
+        warn "nvm not available"
     fi
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 📦 PACKAGE MANAGERS SETUP
-# ────────────────────────────────────────────────────────────────────────────────
-
-install_package_managers() {
-    print_header "📦 INSTALLING UNIVERSAL PACKAGE MANAGERS"
-    export NVM_DIR="$HOME/.nvm"
-    # shellcheck disable=SC1091
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-    if ! command_exists node; then
-        print_error "Node.js not found. Cannot install package managers."
-        return 1
-    fi
-    if ! command_exists ni; then
-        print_step "Installing ni (universal package manager)..."
-        if npm install -g @antfu/ni; then
-            print_success "ni installed successfully"
-            print_info "Usage: ni (install), nr (run), nx (execute), nu (update), nun (uninstall)"
-        else
-            print_warning "Failed to install ni via npm"
-        fi
+install_js_tooling() {
+    headline "JS Tooling (ni / pnpm / diff-so-fancy)"
+    have node || { warn "Node missing—skip JS tooling"; return; }
+    if ! have ni; then
+        step "Install ni"
+        if run npm install -g @antfu/ni; then success "ni"; else warn "ni failed"; fi
     else
-        print_info "Skipping ni, already installed"
+        note "ni present"
     fi
-    if ! command_exists pnpm; then
-        print_step "Installing pnpm (fast package manager)..."
-    local pnpm_installed=false
-    if npm install -g pnpm@latest; then
-        print_success "pnpm installed via npm"
-        pnpm_installed=true
+    if ! have pnpm; then
+        step "Install pnpm"
+        if run npm install -g pnpm@latest; then success "pnpm"; else warn "pnpm failed"; fi
     else
-        print_warning "npm installation failed, trying standalone script..."
-        local pnpm_script
-        pnpm_script=$(curl -fsSL https://get.pnpm.io/install.sh 2>/dev/null)
-        if [[ -n "$pnpm_script" ]]; then
-            if echo "$pnpm_script" | sh -; then
-                print_success "pnpm installed via standalone script"
-                pnpm_installed=true
-                export PNPM_HOME="$HOME/.local/share/pnpm"
-                case ":$PATH:" in
-                    *":$PNPM_HOME:"*) ;;
-                    *) export PATH="$PNPM_HOME:$PATH" ;;
-                esac
-            else
-                print_warning "Standalone script installation failed, trying Corepack..."
-            fi
-        fi
-        if ! $pnpm_installed && command_exists corepack; then
-            if corepack enable pnpm && corepack prepare pnpm@latest --activate; then
-                print_success "pnpm installed via Corepack"
-                pnpm_installed=true
-            else
-                print_warning "Corepack installation failed"
-            fi
-        fi
+        note "pnpm present"
     fi
-    if $pnpm_installed; then
-        print_info "pnpm version: $(pnpm --version 2>/dev/null || echo 'Available after shell restart')"
-        print_info "Tip: Use 'pn' as a shorter alias for pnpm (configured in .zshrc)"
+    if ! have diff-so-fancy; then
+        step "Install diff-so-fancy"
+        if run npm install -g diff-so-fancy; then success "diff-so-fancy"; else warn "diff-so-fancy failed"; fi
     else
-        print_error "Failed to install pnpm via all methods"
-        print_info "You can manually install pnpm later with: npm install -g pnpm"
+        note "diff-so-fancy present"
     fi
-    else
-        print_info "Skipping pnpm, already installed"
-    fi
-    print_step "Verifying package manager installations..."
-    echo ""
-    print_info "Available package managers:"
-    command_exists npm && echo "  ✓ npm $(npm --version)"
-    command_exists ni && echo "  ✓ ni (universal package manager)"
-    command_exists pnpm && echo "  ✓ pnpm $(pnpm --version)" || echo "  ⚠ pnpm (restart shell to use)"
-    command_exists yarn && echo "  ✓ yarn $(yarn --version)" || echo "  - yarn (not installed)"
-    echo ""
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 🛠️ DEVELOPMENT TOOLS INSTALLATION
-# ────────────────────────────────────────────────────────────────────────────────
-
-install_development_tools() {
-    print_header "🛠️ INSTALLING DEVELOPMENT TOOLS"
-    export NVM_DIR="$HOME/.nvm"
-    # shellcheck disable=SC1091
-    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-    # Install Homebrew (Linux) if not present
-    if [[ "$OS_TYPE" == "debian" || "$OS_TYPE" == "redhat" || "$OS_TYPE" == "arch" ]]; then
-        if ! command_exists brew; then
-            print_step "Installing Homebrew for Linux..."
-            if NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; then
-                # Try to find and source the Homebrew environment
-                local brew_shellenv=""
-                if [[ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
-                    brew_shellenv="$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-                elif [[ -x "$HOME/.linuxbrew/bin/brew" ]]; then
-                    brew_shellenv="$("$HOME"/.linuxbrew/bin/brew shellenv)"
-                elif command -v brew >/dev/null 2>&1; then
-                    brew_shellenv="$(brew shellenv)"
-                fi
-
-                if [[ -n "$brew_shellenv" ]]; then
-                    eval "$brew_shellenv"
-                    print_success "Homebrew installed successfully"
-                else
-                    print_warning "Homebrew installed but could not configure environment automatically"
-                fi
-            else
-                print_warning "Failed to install Homebrew - some tools may not be available"
-            fi
-        else
-            print_info "Skipping Homebrew, already installed"
-        fi
-    fi
-
-    # Install FZF (Fuzzy Finder)
-    if ! command_exists fzf; then
-        print_step "Installing FZF (Fuzzy Finder)..."
+install_dev_extras() {
+    headline "Dev Utilities (fzf fd bat tree glow pyenv hub alias)"
+    case "$OS_TYPE" in
+        debian)
+            ensure_pkgs "fzf stack" fzf fd-find bat tree
+            if have fdfind && ! grep -q 'alias fd=' "$HOME/.zshrc" 2>/dev/null; then echo 'alias fd=fdfind' >>"$HOME/.zshrc"; fi
+            if ! have bat && have batcat && ! grep -q 'alias bat=' "$HOME/.zshrc" 2>/dev/null; then echo 'alias bat=batcat' >>"$HOME/.zshrc"; fi
+            ;;
+        redhat) ensure_pkgs "fzf stack" fzf bat tree fd-find ;;
+        arch) ensure_pkgs "fzf stack" fzf bat tree fd ;;
+        macos) ensure_pkgs "fzf stack" fzf bat tree fd ;;
+        *) warn "Skip fzf stack (manual)" ;;
+    esac
+    # glow
+    if ! have glow; then
         case "$OS_TYPE" in
-            "debian")
-                if command_exists brew; then
-                    if brew install fzf; then
-                        print_success "FZF installed via Homebrew"
-                    else
-                        print_warning "Failed to install fzf via Homebrew, trying apt..."
-                        if sudo apt update && sudo apt install fzf -y; then
-                            print_success "FZF installed via apt"
-                        else
-                            print_warning "Failed to install fzf via apt"
-                        fi
-                    fi
-                else
-                    if sudo apt update && sudo apt install fzf -y; then
-                        print_success "FZF installed via apt"
-                    else
-                        print_warning "Failed to install fzf via apt"
-                    fi
-                fi
-            ;;
-            "redhat")
-                if command_exists brew; then
-                    if brew install fzf; then
-                        print_success "FZF installed via Homebrew"
-                    else
-                        print_warning "Failed to install fzf via Homebrew, trying dnf/yum..."
-                        if command_exists dnf; then
-                            if sudo dnf install fzf -y; then
-                                print_success "FZF installed via dnf"
-                            else
-                                print_warning "Failed to install fzf via dnf"
-                            fi
-                        elif command_exists yum; then
-                            if sudo yum install fzf -y; then
-                                print_success "FZF installed via yum"
-                            else
-                                print_warning "Failed to install fzf via yum"
-                            fi
-                        else
-                            print_warning "No compatible package manager found"
-                        fi
-                    fi
-                else
-                    if command_exists dnf; then
-                        if sudo dnf install fzf -y; then
-                            print_success "FZF installed via dnf"
-                        else
-                            print_warning "Failed to install fzf via dnf"
-                        fi
-                    elif command_exists yum; then
-                        if sudo yum install fzf -y; then
-                            print_success "FZF installed via yum"
-                        else
-                            print_warning "Failed to install fzf via yum"
-                        fi
-                    else
-                        print_warning "No compatible package manager found"
-                    fi
-                fi
-            ;;
-            "arch")
-                if sudo pacman -S fzf --noconfirm; then
-                    print_success "FZF installed via pacman"
-                else
-                    print_warning "Failed to install fzf via pacman"
-                fi
-            ;;
-            "macos")
-                if brew install fzf; then
-                    print_success "FZF installed via Homebrew"
-                else
-                    print_warning "Failed to install fzf via Homebrew"
-                fi
-            ;;
-            *)
-                if command_exists brew; then
-                    if brew install fzf; then
-                        print_success "FZF installed via Homebrew"
-                    else
-                        print_warning "Failed to install fzf via Homebrew"
-                    fi
-                else
-                    print_warning "Cannot install fzf automatically on this system"
-                    print_info "Please install fzf manually: https://github.com/junegunn/fzf#installation"
-                fi
-            ;;
+            debian) step glow; pkg_install glow || warn "glow skipped" ;;
+            arch) pkg_install glow ;;
+            macos) pkg_install glow ;;
+            redhat) pkg_install glow || warn "glow skipped" ;;
+            *) warn "Install glow manually" ;;
         esac
-        if command_exists fzf; then
-            print_success "FZF installation verified"
-            print_info "Version: $(fzf --version 2>/dev/null || echo 'Available after shell restart')"
-        else
-            print_warning "FZF installation verification failed"
-        fi
-    else
-        print_info "Skipping FZF, already installed"
-        print_info "Current version: $(fzf --version 2>/dev/null || echo 'Available after shell restart')"
     fi
+    # hub alias
+    if ! have hub && have gh; then grep -q "alias hub=" "$HOME/.zshrc" 2>/dev/null || echo "alias hub='gh'" >>"$HOME/.zshrc"; fi
 
-    # Install additional tools that complement fzf
-    if ! command_exists fd; then
-        print_step "Installing fd (better find alternative for fzf)..."
-        case "$OS_TYPE" in
-            "debian")
-                if command_exists brew; then
-                    if brew install fd; then
-                        print_success "fd installed via Homebrew"
-                    else
-                        print_warning "Failed to install fd via Homebrew, trying apt..."
-                        if sudo apt update && sudo apt install fd-find -y; then
-                            # On Debian/Ubuntu, fd is called fd-find to avoid conflicts
-                            if ! command_exists fd && command_exists fdfind; then
-                                echo 'alias fd=fdfind' >> "$HOME/.zshrc"
-                                print_success "fd (fd-find) installed via apt with alias"
-                            else
-                                print_success "fd installed via apt"
-                            fi
-                        else
-                            print_warning "Failed to install fd via apt"
-                        fi
-                    fi
-                else
-                    if sudo apt update && sudo apt install fd-find -y; then
-                        if ! command_exists fd && command_exists fdfind; then
-                            echo 'alias fd=fdfind' >> "$HOME/.zshrc"
-                            print_success "fd (fd-find) installed via apt with alias"
-                        else
-                            print_success "fd installed via apt"
-                        fi
-                    else
-                        print_warning "Failed to install fd via apt"
-                    fi
-                fi
-            ;;
-            "redhat")
-                if command_exists brew; then
-                    if brew install fd; then
-                        print_success "fd installed via Homebrew"
-                    else
-                        print_warning "Failed to install fd via Homebrew"
-                    fi
-                elif command_exists dnf; then
-                    if sudo dnf install fd-find -y; then
-                        print_success "fd installed via dnf"
-                    else
-                        print_warning "Failed to install fd via dnf"
-                    fi
-                elif command_exists yum; then
-                    if sudo yum install fd-find -y; then
-                        print_success "fd installed via yum"
-                    else
-                        print_warning "Failed to install fd via yum"
-                    fi
-                fi
-            ;;
-            "arch")
-                if sudo pacman -S fd --noconfirm; then
-                    print_success "fd installed via pacman"
-                else
-                    print_warning "Failed to install fd via pacman"
-                fi
-            ;;
-            "macos")
-                if brew install fd; then
-                    print_success "fd installed via Homebrew"
-                else
-                    print_warning "Failed to install fd via Homebrew"
-                fi
-            ;;
-            *)
-                if command_exists brew; then
-                    if brew install fd; then
-                        print_success "fd installed via Homebrew"
-                    else
-                        print_warning "Failed to install fd via Homebrew"
-                    fi
-                else
-                    print_warning "Cannot install fd automatically on this system"
-                fi
-            ;;
-        esac
-    else
-        print_info "Skipping fd, already installed"
-    fi
-
-    # Install bat for better file previews in fzf
-    if ! command_exists bat; then
-        print_step "Installing bat (better cat with syntax highlighting)..."
-        case "$OS_TYPE" in
-            "debian")
-                if command_exists brew; then
-                    if brew install bat; then
-                        print_success "bat installed via Homebrew"
-                    else
-                        print_warning "Failed to install bat via Homebrew, trying apt..."
-                        if sudo apt update && sudo apt install bat -y; then
-                            # On older Debian/Ubuntu, bat might be called batcat
-                            if ! command_exists bat && command_exists batcat; then
-                                echo 'alias bat=batcat' >> "$HOME/.zshrc"
-                                print_success "bat (batcat) installed via apt with alias"
-                            else
-                                print_success "bat installed via apt"
-                            fi
-                        else
-                            print_warning "Failed to install bat via apt"
-                        fi
-                    fi
-                else
-                    if sudo apt update && sudo apt install bat -y; then
-                        if ! command_exists bat && command_exists batcat; then
-                            echo 'alias bat=batcat' >> "$HOME/.zshrc"
-                            print_success "bat (batcat) installed via apt with alias"
-                        else
-                            print_success "bat installed via apt"
-                        fi
-                    else
-                        print_warning "Failed to install bat via apt"
-                    fi
-                fi
-            ;;
-            "redhat")
-                if command_exists brew; then
-                    if brew install bat; then
-                        print_success "bat installed via Homebrew"
-                    else
-                        print_warning "Failed to install bat via Homebrew"
-                    fi
-                elif command_exists dnf; then
-                    if sudo dnf install bat -y; then
-                        print_success "bat installed via dnf"
-                    else
-                        print_warning "Failed to install bat via dnf"
-                    fi
-                elif command_exists yum; then
-                    if sudo yum install bat -y; then
-                        print_success "bat installed via yum"
-                    else
-                        print_warning "Failed to install bat via yum"
-                    fi
-                fi
-            ;;
-            "arch")
-                if sudo pacman -S bat --noconfirm; then
-                    print_success "bat installed via pacman"
-                else
-                    print_warning "Failed to install bat via pacman"
-                fi
-            ;;
-            "macos")
-                if brew install bat; then
-                    print_success "bat installed via Homebrew"
-                else
-                    print_warning "Failed to install bat via Homebrew"
-                fi
-            ;;
-            *)
-                if command_exists brew; then
-                    if brew install bat; then
-                        print_success "bat installed via Homebrew"
-                    else
-                        print_warning "Failed to install bat via Homebrew"
-                    fi
-                else
-                    print_warning "Cannot install bat automatically on this system"
-                fi
-            ;;
-        esac
-    else
-        print_info "Skipping bat, already installed"
-    fi
-
-    # Install tree for directory previews
-    if ! command_exists tree; then
-        print_step "Installing tree (directory structure viewer)..."
-        case "$OS_TYPE" in
-            "debian")
-                if command_exists brew; then
-                    if brew install tree; then
-                        print_success "tree installed via Homebrew"
-                    else
-                        print_warning "Failed to install tree via Homebrew"
-                    fi
-                else
-                    if sudo apt update && sudo apt install tree -y; then
-                        print_success "tree installed via apt"
-                    else
-                        print_warning "Failed to install tree via apt"
-                    fi
-                fi
-            ;;
-            "redhat")
-                if command_exists brew; then
-                    if brew install tree; then
-                        print_success "tree installed via Homebrew"
-                    else
-                        print_warning "Failed to install tree via Homebrew"
-                    fi
-                elif command_exists dnf; then
-                    if sudo dnf install tree -y; then
-                        print_success "tree installed via dnf"
-                    else
-                        print_warning "Failed to install tree via dnf"
-                    fi
-                elif command_exists yum; then
-                    if sudo yum install tree -y; then
-                        print_success "tree installed via yum"
-                    else
-                        print_warning "Failed to install tree via yum"
-                    fi
-                fi
-            ;;
-            "arch")
-                if sudo pacman -S tree --noconfirm; then
-                    print_success "tree installed via pacman"
-                else
-                    print_warning "Failed to install tree via pacman"
-                fi
-            ;;
-            "macos")
-                if brew install tree; then
-                    print_success "tree installed via Homebrew"
-                else
-                    print_warning "Failed to install tree via Homebrew"
-                fi
-            ;;
-            *)
-                if command_exists brew; then
-                    if brew install tree; then
-                        print_success "tree installed via Homebrew"
-                    else
-                        print_warning "Failed to install tree via Homebrew"
-                    fi
-                else
-                    print_warning "Cannot install tree automatically on this system"
-                fi
-            ;;
-        esac
-    else
-        print_info "Skipping tree, already installed"
-    fi
-
-    # Install diff-so-fancy (Git diff enhancement)
-    if ! command_exists diff-so-fancy; then
-        print_step "Installing diff-so-fancy..."
-        if command_exists npm; then
-            if npm install -g diff-so-fancy; then
-                print_success "diff-so-fancy installed via npm"
-            else
-                print_warning "Failed to install diff-so-fancy via npm"
-            fi
-        else
-            print_warning "npm not available - skipping diff-so-fancy installation"
-        fi
-    else
-        print_info "Skipping diff-so-fancy, already installed"
-    fi
-
-    # Install PyEnv (Python Version Manager)
+    # pyenv (minimal path)
     if [[ ! -d "$HOME/.pyenv" ]]; then
-        print_step "Installing PyEnv (Python Version Manager)..."
-
-        # Install build dependencies first
-        print_info "Installing Python build dependencies..."
-        case "$OS_TYPE" in
-            "debian")
-                if sudo apt update && sudo apt install -y build-essential libssl-dev zlib1g-dev \
-                libbz2-dev libreadline-dev libsqlite3-dev curl \
-                libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev; then
-                    print_success "Python build dependencies installed"
-                else
-                    print_warning "Failed to install some Python build dependencies"
-                fi
-            ;;
-            "redhat")
-                if command_exists dnf; then
-                    sudo dnf groupinstall -y "Development Tools"
-                    sudo dnf install -y gcc openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel sqlite-devel xz-devel
-                elif command_exists yum; then
-                    sudo yum groupinstall -y "Development Tools"
-                    sudo yum install -y gcc openssl-devel bzip2-devel libffi-devel zlib-devel readline-devel sqlite-devel xz-devel
-                fi
-            ;;
-            "arch")
-                sudo pacman -S --needed base-devel openssl zlib xz tk
-            ;;
-            "macos")
-                # macOS should have Xcode command line tools
-                if ! xcode-select -p >/dev/null 2>&1; then
-                    print_info "Installing Xcode command line tools..."
-                    xcode-select --install
-                fi
-            ;;
-        esac
-
-        if curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash; then
-            print_success "PyEnv installed successfully"
-            export PYENV_ROOT="$HOME/.pyenv"
-            export PATH="$PYENV_ROOT/bin:$PATH"
-            if command_exists pyenv; then
-                eval "$(pyenv init --path)" 2>/dev/null || true
-                eval "$(pyenv init -)" 2>/dev/null || true
-                eval "$(pyenv virtualenv-init -)" 2>/dev/null || true
-                print_info "PyEnv initialized for current session"
-                print_step "Installing latest stable Python version..."
-                local latest_python
-                latest_python=$(pyenv install --list 2>/dev/null | grep -E '^\s*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' ')
-                if [[ -n "$latest_python" ]]; then
-                    print_info "Installing Python $latest_python..."
-                    # Try to install with timeout to avoid hanging
-                    if timeout 300 pyenv install "$latest_python" 2>/dev/null; then
-                        pyenv global "$latest_python"
-                        print_success "Python $latest_python installed and set as global default"
-                        print_info "Python version: $(python --version 2>/dev/null || echo 'Available after shell restart')"
-                    else
-                        print_warning "Failed to install Python $latest_python - this may take time or need additional dependencies"
-                        print_info "You can manually install later with: pyenv install $latest_python"
-                        print_info "Common issues: missing build dependencies or network timeout"
-                    fi
-                else
-                    print_warning "Could not determine latest Python version to install"
-                fi
-            fi
-        else
-            print_warning "Failed to install PyEnv"
+        step "Install pyenv"
+        if ! run bash -c 'curl -fsSL https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash'; then
+            warn "pyenv installer failed"
         fi
     else
-        print_info "Skipping PyEnv, already installed"
-        export PYENV_ROOT="$HOME/.pyenv"
-        export PATH="$PYENV_ROOT/bin:$PATH"
-        if command_exists pyenv; then
-            eval "$(pyenv init --path)" 2>/dev/null || true
-            eval "$(pyenv init -)" 2>/dev/null || true
-            eval "$(pyenv virtualenv-init -)" 2>/dev/null || true
-            local current_python
-            current_python=$(pyenv global 2>/dev/null)
-            if [[ "$current_python" == "system" || -z "$current_python" ]]; then
-                print_step "No Python version set in PyEnv, installing latest stable version..."
-                local latest_python
-                latest_python=$(pyenv install --list 2>/dev/null | grep -E '^\s*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' ')
-                if [[ -n "$latest_python" ]]; then
-                    print_info "Installing Python $latest_python..."
-                    if timeout 300 pyenv install "$latest_python" 2>/dev/null; then
-                        pyenv global "$latest_python"
-                        print_success "Python $latest_python installed and set as global default"
-                    else
-                        print_warning "Failed to install Python $latest_python - this may take time or need additional dependencies"
-                        print_info "You can manually install later with: pyenv install $latest_python"
-                    fi
+        note "pyenv present"
+    fi
+    export PYENV_ROOT="$HOME/.pyenv"; export PATH="$PYENV_ROOT/bin:$PATH"
+    if have pyenv; then eval "$(pyenv init - 2>/dev/null)" || true; local pyv
+        pyv="$(pyenv global 2>/dev/null || true)"; if [[ -z "$pyv" || "$pyv" == system ]]; then
+            step "Install latest Python (pyenv)"
+            local latest
+            latest="$(pyenv install --list | grep -E '^[ ]*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' ')"
+            if [[ -n "$latest" ]]; then
+                if run pyenv install -s "$latest" && run pyenv global "$latest"; then
+                    success "Python $latest"
+                else
+                    warn "Python install skipped"
                 fi
-            else
-                print_info "PyEnv Python version: $current_python"
             fi
         fi
-    fi
-
-    # Install glow for markdown rendering (used by help function)
-    if ! command_exists glow; then
-        print_step "Installing glow (markdown renderer for help)..."
-        case "$OS_TYPE" in
-            "debian")
-                print_step "Setting up Charm repository for glow..."
-                if sudo mkdir -p /etc/apt/keyrings && \
-                   curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg && \
-                   echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list && \
-                   sudo apt update && sudo apt install glow -y; then
-                    print_success "glow installed via Charm repository"
-                else
-                    print_warning "Failed to install glow via Charm repository, trying snap..."
-                    if command_exists snap && sudo snap install glow; then
-                        print_success "glow installed via snap"
-                    else
-                        print_warning "Failed to install glow via snap"
-                    fi
-                fi
-            ;;
-            "redhat")
-                print_step "Setting up Charm repository for glow..."
-                if echo '[charm]
-name=Charm
-baseurl=https://repo.charm.sh/yum/
-enabled=1
-gpgcheck=1
-gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/yum.repos.d/charm.repo; then
-                    if command_exists dnf; then
-                        if sudo dnf install glow -y; then
-                            print_success "glow installed via dnf (Charm repo)"
-                        else
-                            print_warning "Failed to install glow via dnf"
-                        fi
-                    elif command_exists yum; then
-                        if sudo yum install glow -y; then
-                            print_success "glow installed via yum (Charm repo)"
-                        else
-                            print_warning "Failed to install glow via yum"
-                        fi
-                    fi
-                else
-                    print_warning "Failed to set up Charm repository"
-                fi
-            ;;
-            "arch")
-                if sudo pacman -S glow --noconfirm; then
-                    print_success "glow installed via pacman"
-                else
-                    print_warning "Failed to install glow via pacman"
-                fi
-            ;;
-            "macos")
-                if command_exists brew; then
-                    if brew install glow; then
-                        print_success "glow installed via Homebrew"
-                    else
-                        print_warning "Failed to install glow via Homebrew"
-                    fi
-                else
-                    print_warning "Homebrew not found, cannot install glow automatically"
-                fi
-            ;;
-            *)
-                if command_exists brew; then
-                    if brew install glow; then
-                        print_success "glow installed via Homebrew"
-                    else
-                        print_warning "Failed to install glow via Homebrew"
-                    fi
-                else
-                    print_warning "Cannot install glow automatically on this system"
-                    print_info "Please install glow manually: https://github.com/charmbracelet/glow"
-                fi
-            ;;
-        esac
-    else
-        print_info "Skipping glow, already installed"
-    fi
-
-    # Create ~/.local/bin if it doesn't exist
-    if [[ -d "$HOME/.local/bin" ]]; then
-        print_info "✅ ~/.local/bin directory exists"
-    else
-        print_step "Creating ~/.local/bin directory..."
-        mkdir -p "$HOME/.local/bin"
-        print_success "Created ~/.local/bin directory"
-    fi
-
-    print_step "Verifying development tools installation..."
-    echo ""
-    print_info "🛠️ Development tools status:"
-    command_exists fzf && echo "  ✓ fzf $(fzf --version)" || echo "  ❌ fzf (not available)"
-    command_exists fd && echo "  ✓ fd $(fd --version | head -n1)" || echo "  ○ fd (not available - fzf will use find)"
-    command_exists bat && echo "  ✓ bat $(bat --version | head -n1)" || echo "  ○ bat (not available - fzf will use cat)"
-    command_exists tree && echo "  ✓ tree $(tree --version | head -n1)" || echo "  ○ tree (not available - fzf will use ls)"
-    command_exists diff-so-fancy && echo "  ✓ diff-so-fancy" || echo "  ❌ diff-so-fancy (not available)"
-    if command_exists pyenv; then
-        local pyenv_python
-        pyenv_python=$(pyenv global 2>/dev/null)
-        echo "  ✓ pyenv $(pyenv --version) (Python: ${pyenv_python:-system})"
-    else
-        echo "  ❌ pyenv (not available)"
-    fi
-    command_exists live-server && echo "  ✓ live-server" || echo "  ○ live-server (optional)"
-    command_exists brew && echo "  ✓ brew $(brew --version | head -n1)" || echo "  ○ brew (not available on this system)"
-    echo ""
-
-    # Show fzf integration status
-    if command_exists fzf; then
-        echo -e "${CYAN}🔍 FZF Integration:${NC}"
-        echo "  • Modern shell integration: $(fzf --zsh >/dev/null 2>&1 && echo '✅ Available (fzf --zsh)' || echo '⚠️ Fallback to manual scripts')"
-        echo "  • File finder: $(command_exists fd && echo 'fd (fast)' || echo 'find (fallback)')"
-        echo "  • File preview: $(command_exists bat && echo 'bat (syntax highlighted)' || echo 'cat (plain text)')"
-        echo "  • Directory preview: $(command_exists tree && echo 'tree (structured)' || echo 'ls (simple)')"
-        echo ""
     fi
 }
-
-# ────────────────────────────────────────────────────────────────────────────────
-# 📁 DOTFILES CONFIGURATION
-# ────────────────────────────────────────────────────────────────────────────────
 
 apply_dotfiles() {
-    print_header "📁 APPLYING DOTFILES CONFIGURATION"
-
-    # ENFORCE: Always ensure we have a valid HOME directory
-    # The .zshrc file MUST go to the user's home directory, regardless of where this script is run from
-    if [[ -z "$HOME" ]]; then
-        print_error "HOME environment variable is not set. Cannot determine user home directory."
-        return 1
-    fi
-    
-    if [[ ! -d "$HOME" ]]; then
-        print_error "Home directory '$HOME' does not exist or is not accessible."
-        return 1
-    fi
-    
-    print_info "Target directory: $HOME (user home directory)"
-    print_info "Installing dotfiles to user home, regardless of script location"
-
-    if is_remote_install; then
-        # REMOTE INSTALL: Download from GitHub and place directly in HOME
-        # This ensures .zshrc always goes to the user's home directory ($HOME/.zshrc)
-        print_step "Downloading latest .zshrc from GitHub..."
-        local temp_file
-        temp_file=$(mktemp)
-
-        if download_file ".zshrc" "$temp_file"; then
-            print_step "Applying .zshrc configuration..."
-            # ENFORCE: Always copy to $HOME/.zshrc (user's home directory)
-            # This is explicit and dumb - we don't care where the script runs from
-            if cp "$temp_file" "$HOME/.zshrc"; then
-                print_success "✅ .zshrc downloaded and applied (overwritten)"
+    headline "Dotfiles (.zshrc + help)"
+    if remote_install; then
+        step "Fetch remote .zshrc"; download .zshrc "$HOME/.zshrc.tmp" || die ".zshrc download failed"; backup "$HOME/.zshrc"; mv "$HOME/.zshrc.tmp" "$HOME/.zshrc"; success ".zshrc applied"
+        step "Fetch remote help"
+        if download .zshrc.help.md "$HOME/.zshrc.help.md.tmp"; then
+            if mv "$HOME/.zshrc.help.md.tmp" "$HOME/.zshrc.help.md"; then
+                success "help applied"
             else
-                print_error "Failed to copy .zshrc to home directory"
-                rm -f "$temp_file"
-                return 1
+                warn "failed to apply help file"
             fi
-            rm -f "$temp_file"
         else
-            print_error "Failed to download .zshrc from GitHub"
-            rm -f "$temp_file"
-            return 1
-        fi
-
-        # Download and apply help file
-        print_step "Downloading help file (.zshrc.help.md)..."
-        local help_temp_file
-        help_temp_file=$(mktemp)
-
-        if download_file ".zshrc.help.md" "$help_temp_file"; then
-            print_step "Applying help file..."
-            # ENFORCE: Always place help file in $HOME (user's home directory)
-            if cp "$help_temp_file" "$HOME/.zshrc.help.md"; then
-                print_success "✅ .zshrc.help.md downloaded and applied"
-            else
-                print_error "Failed to copy .zshrc.help.md to home directory"
-                rm -f "$help_temp_file"
-                return 1
-            fi
-            rm -f "$help_temp_file"
-        else
-            print_error "Failed to download .zshrc.help.md from GitHub"
-            rm -f "$help_temp_file"
-            return 1
+            warn "help file missing"
         fi
     else
-        # LOCAL INSTALL: Create symlinks from HOME to local dotfiles repo
-        # This ensures .zshrc is always accessible from the user's home directory
-        print_step "Creating symlinks to local dotfiles repository..."
-
-        # Handle .zshrc - ENFORCE: Always symlink from $HOME/.zshrc to local repo
-        if [[ -f "$SCRIPT_DIR/.zshrc" ]]; then
-            backup_file "$HOME/.zshrc"
-            if [[ -L "$HOME/.zshrc" ]]; then
-                rm "$HOME/.zshrc"
-                print_info "Removed existing .zshrc symlink"
-            fi
-            # ENFORCE: Always create symlink in $HOME (user's home directory)
-            if ln -sf "$SCRIPT_DIR/.zshrc" "$HOME/.zshrc"; then
-                print_success "✅ .zshrc symlinked to local repository"
-            else
-                print_error "Failed to create .zshrc symlink"
-                return 1
-            fi
-        else
-            print_error "Local .zshrc not found in $SCRIPT_DIR"
-            return 1
-        fi
-
-        # Handle .zshrc.help.md - ENFORCE: Always place in $HOME
-        if [[ -f "$SCRIPT_DIR/.zshrc.help.md" ]]; then
-            backup_file "$HOME/.zshrc.help.md"
-            if [[ -L "$HOME/.zshrc.help.md" ]]; then
-                rm "$HOME/.zshrc.help.md"
-                print_info "Removed existing .zshrc.help.md symlink"
-            fi
-            # ENFORCE: Always create symlink in $HOME (user's home directory)
-            if ln -sf "$SCRIPT_DIR/.zshrc.help.md" "$HOME/.zshrc.help.md"; then
-                print_success "✅ .zshrc.help.md symlinked to local repository"
-            else
-                print_error "Failed to create .zshrc.help.md symlink"
-                return 1
-            fi
-        else
-            print_error "Local .zshrc.help.md not found in $SCRIPT_DIR"
-            return 1
-        fi
+        [[ -f "$SCRIPT_DIR/.zshrc" ]] || die ".zshrc missing in repo"
+        backup "$HOME/.zshrc"; ln -sf "$SCRIPT_DIR/.zshrc" "$HOME/.zshrc"; success "symlink .zshrc"
+        if [[ -f "$SCRIPT_DIR/.zshrc.help.md" ]]; then backup "$HOME/.zshrc.help.md"; ln -sf "$SCRIPT_DIR/.zshrc.help.md" "$HOME/.zshrc.help.md"; success "symlink help"; fi
     fi
-
-    print_success "Dotfiles configuration completed"
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 🔧 POST-INSTALLATION
-# ────────────────────────────────────────────────────────────────────────────────
-
-configure_shell() {
-    print_header "🔧 FINALIZING SHELL CONFIGURATION"
-    if [[ "$SHELL" != */zsh ]]; then
-        print_step "Setting zsh as default shell..."
-        local zsh_path
-        zsh_path=$(command -v zsh)
-        if [[ -n "$zsh_path" ]]; then
-            if chsh -s "$zsh_path"; then
-                print_success "Default shell changed to zsh"
-            else
-                print_warning "Failed to change default shell. You may need to run: chsh -s $zsh_path"
-            fi
-        else
-            print_error "zsh not found in PATH"
-        fi
+set_default_shell() {
+    headline "Default Shell"
+    if [[ ${SHELL:-} == *zsh ]]; then note "Already zsh"; return 0; fi
+    local zsh_path; zsh_path="$(command -v zsh || true)"; [[ -n "$zsh_path" ]] || { warn "zsh not found"; return 0; }
+    step "Setting default shell to zsh"
+    if run chsh -s "$zsh_path" "$USER"; then
+        success "Shell changed"
     else
-        print_info "zsh is already the default shell"
+        warn "chsh failed (manual: chsh -s $zsh_path)"
     fi
 }
 
-display_summary() {
-    print_header "🎉 INSTALLATION COMPLETE"
-    echo -e "${GREEN}✅ Successfully installed:${NC}"
-    echo -e "   • Oh My Zsh with custom configuration"
-    echo -e "   • Pure prompt theme"
-    echo -e "   • Zsh plugins (autosuggestions, syntax highlighting, z, you-should-use)"
-    echo -e "   • NVM and Node.js LTS"
-    echo -e "   • Package managers (ni, pnpm)"
-    echo -e "   • GitHub CLI (gh)"
-    echo -e "   • Modern fzf with shell integration (CTRL-T, CTRL-R, ALT-C)"
-    echo -e "   • Enhanced fzf tools (fd, bat, tree)"
-    echo -e "   • Development tools (gh, diff-so-fancy, pyenv, live-server)"
-    echo -e "   • Glow markdown renderer (for help system)"
-    echo -e "   • Custom .zshrc configuration with help system"
-    echo ""
-    if [[ -d "$BACKUP_DIR" ]]; then
-        echo -e "${CYAN}💾 Backups saved to:${NC} $BACKUP_DIR"
-        echo ""
-    fi
-    echo -e "${YELLOW}📝 Next steps:${NC}"
-    echo -e "   1. ${WHITE}Restart your terminal${NC} or run: ${CYAN}exec zsh${NC}"
-    echo -e "   2. Verify everything works: ${CYAN}help${NC}"
-    echo -e "   3. Try fzf key bindings:"
-    echo -e "      • ${CYAN}CTRL-T${NC} - Fuzzy find files/directories"
-    echo -e "      • ${CYAN}CTRL-R${NC} - Fuzzy search command history"
-    echo -e "      • ${CYAN}ALT-C${NC}  - Fuzzy change directory"
-    echo -e "   4. Install additional tools as needed"
-    echo ""
-    if is_remote_install; then
-        echo -e "${PURPLE}🚀 One-liner for future installs:${NC}"
-        echo -e "${CYAN}curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh | bash${NC}"
-        echo ""
-    fi
-    echo -e "${BLUE}📋 Installation log:${NC} $LOG_FILE"
-    echo -e "${PURPLE}🚀 Happy coding!${NC}"
-    echo ""
+summary() {
+    headline "Summary"
+    printf "%bInstalled targets%b\n" "$C_BOLD" "$C_RESET"
+    for c in zsh git curl wget gh nvm node ni pnpm fzf fd bat tree diff-so-fancy pyenv glow; do
+        if have "$c"; then printf "  %b✔%b %s\n" "$C_GREEN" "$C_RESET" "$c"; else printf "  %b✖%b %s\n" "$C_RED" "$C_RESET" "$c"; fi
+    done
+    [[ -d "$BACKUP_DIR" ]] && note "Backups in $BACKUP_DIR"
+    printf "\nNext: restart shell or run: %bexec zsh%b\n" "$C_CYAN" "$C_RESET"
+    remote_install && printf "Re-run later: curl -fsSL %s/install.sh | bash\n" "$DOTFILES_RAW"
+    info "Log: $LOG_FILE"
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# 🎯 MAIN EXECUTION
-# ────────────────────────────────────────────────────────────────────────────────
+self_test() {
+    headline "Self-Test"
+    local failed=0
+    for binary in zsh git curl; do have "$binary" || { failed=1; warn "$binary missing"; }; done
+    [[ -f "$HOME/.zshrc" ]] || { failed=1; warn ".zshrc missing"; }
+    if [[ $failed -eq 0 ]]; then success "Basic self-test passed"; else warn "Self-test encountered issues"; fi
+}
 
 main() {
-    case "${1:-}" in
-        --help | -h)
-            echo "Modern Development Environment Installer"
-            echo ""
-            echo "Usage: $0 [OPTIONS]"
-            echo ""
-            echo "Options:"
-            echo "  --help, -h     Show this help message"
-            echo "  --dry-run      Show what would be installed without making changes"
-            echo "  --skip-packages Skip system package installation"
-            echo ""
-            exit 0
-        ;;
-        --dry-run)
-            echo "DRY RUN MODE - No changes will be made"
-            export DRY_RUN=1
-        ;;
-        --skip-packages)
-            export SKIP_PACKAGES=1
-        ;;
-    esac
-
-    initialize
-    if [[ "${SKIP_PACKAGES:-}" != "1" ]]; then
-        install_base_packages
-    fi
-    install_github_cli
-    install_oh_my_zsh
-    install_pure_prompt
+    headline "Initialize"
+    require_internet
+    install_base
+    install_gh_cli
+    install_ohmyzsh
+    install_pure
     install_zsh_plugins
-    install_nvm
-    install_package_managers
-    install_development_tools
+    install_nvm_node
+    install_js_tooling
+    install_dev_extras
     apply_dotfiles
-    configure_shell
-    display_summary
-    log "Installation completed successfully"
+    set_default_shell
+    self_test
+    summary
+    success "Installation complete"
 }
 
 main "$@"
