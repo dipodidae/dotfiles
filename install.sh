@@ -94,9 +94,9 @@ remote_install() { [[ ! -d "$SCRIPT_DIR/.git" ]]; }
 load_nvm() {
     if [[ -z "${NVM_DIR:-}" ]]; then return 0; fi
     if [[ -s "$NVM_DIR/nvm.sh" ]]; then
-        # shellcheck disable=SC1091
-        set +u
-        . "$NVM_DIR/nvm.sh"
+    set +u
+    # shellcheck disable=SC1091
+    . "$NVM_DIR/nvm.sh"
         set -u
     fi
 }
@@ -165,6 +165,37 @@ ensure_pkgs() { # ensure_pkgs label pkgs...
     else
         warn "$label partial/failed"
     fi
+}
+
+# Install Python build dependencies needed for compiling new versions via pyenv.
+install_python_build_deps() {
+    case "$OS_TYPE" in
+        debian)
+            ensure_pkgs "python build deps" build-essential libssl-dev zlib1g-dev \
+                libbz2-dev libreadline-dev libsqlite3-dev libncursesw5-dev xz-utils \
+                tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+            ;;
+        redhat)
+            if have dnf; then
+                pkg_install gcc gcc-c++ make openssl-devel bzip2 bzip2-devel libffi-devel zlib-devel readline-devel sqlite sqlite-devel xz xz-devel tk tk-devel || true
+            else
+                pkg_install gcc gcc-c++ make openssl-devel bzip2 bzip2-devel libffi-devel zlib-devel readline-devel sqlite sqlite-devel xz xz-devel tk tk-devel || true
+            fi
+            ;;
+        arch)
+            ensure_pkgs "python build deps" base-devel openssl zlib xz tk || true
+            ;;
+        macos)
+            # Xcode CLT required
+            if ! xcode-select -p >/dev/null 2>&1; then
+                step "Installing Xcode Command Line Tools"
+                xcode-select --install || true
+            fi
+            ;;
+        *)
+            warn "Skipping automatic Python build deps for $OS_TYPE"
+            ;;
+    esac
 }
 
 # Specific component installers ----------------------------------------------
@@ -374,17 +405,35 @@ install_dev_extras() {
         note "pyenv present"
     fi
     export PYENV_ROOT="$HOME/.pyenv"; export PATH="$PYENV_ROOT/bin:$PATH"
-    if have pyenv; then eval "$(pyenv init - 2>/dev/null)" || true; local pyv
-        pyv="$(pyenv global 2>/dev/null || true)"; if [[ -z "$pyv" || "$pyv" == system ]]; then
-            step "Install latest Python (pyenv)"
-            local latest
-            latest="$(pyenv install --list | grep -E '^[ ]*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' ')"
-            if [[ -n "$latest" ]]; then
-                if run pyenv install -s "$latest" && run pyenv global "$latest"; then
-                    success "Python $latest"
-                else
-                    warn "Python install skipped"
+    if have pyenv; then
+        eval "$(pyenv init - 2>/dev/null)" || true
+        local existing latest highest_installed
+        existing="$(pyenv versions --bare 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' || true)"
+        latest="$(pyenv install --list 2>/dev/null | grep -E '^[ ]*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' ')"
+        if [[ -z "$latest" ]]; then
+            warn "Could not determine latest Python 3.x release"
+            return
+        fi
+        if printf '%s\n' "$existing" | grep -qx "$latest"; then
+            note "Latest Python $latest already installed (selecting)"
+            run pyenv global "$latest" || true
+            success "Python $latest active"
+            return
+        fi
+        step "Installing latest Python $latest (pyenv)"
+        install_python_build_deps
+        if run pyenv install -s "$latest" && run pyenv global "$latest"; then
+            success "Python $latest active"
+        else
+            warn "Failed to build Python $latest"
+            if [[ -n "$existing" ]]; then
+                highest_installed="$(printf '%s\n' "$existing" | sort -V | tail -1)"
+                if [[ -n "$highest_installed" ]]; then
+                    run pyenv global "$highest_installed" || true
+                    note "Using existing pyenv Python $highest_installed"
                 fi
+            else
+                warn "No pyenv Python available; system Python remains"
             fi
         fi
     fi
@@ -405,8 +454,39 @@ apply_dotfiles() {
             warn "help file missing"
         fi
     else
-        [[ -f "$SCRIPT_DIR/.zshrc" ]] || die ".zshrc missing in repo"
-        backup "$HOME/.zshrc"; ln -sf "$SCRIPT_DIR/.zshrc" "$HOME/.zshrc"; success "symlink .zshrc"
+        if [[ -f "$SCRIPT_DIR/.zshrc" ]]; then
+            backup "$HOME/.zshrc"; ln -sf "$SCRIPT_DIR/.zshrc" "$HOME/.zshrc"; success "symlink .zshrc"
+        else
+                        warn "Local .zshrc not found; attempting remote fetch"
+                        if download .zshrc "$HOME/.zshrc.tmp" && mv "$HOME/.zshrc.tmp" "$HOME/.zshrc"; then
+                                success "Downloaded remote .zshrc"
+                        else
+                                warn "Remote .zshrc unavailable; generating minimal fallback"
+                                backup "$HOME/.zshrc"
+                                cat >"$HOME/.zshrc" <<'EOF'
+# Minimal fallback .zshrc (auto-generated)
+export PATH="$HOME/bin:$PATH"
+export EDITOR="nvim"
+# pyenv
+if [ -d "$HOME/.pyenv" ]; then
+    export PYENV_ROOT="$HOME/.pyenv"
+    export PATH="$PYENV_ROOT/bin:$PATH"
+    eval "$(pyenv init - 2>/dev/null)" || true
+fi
+# nvm
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+# Pure prompt (if cloned)
+fpath=("$HOME/.zsh/pure" $fpath)
+autoload -U promptinit; promptinit 2>/dev/null || true
+prompt pure 2>/dev/null || true
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -CF'
+EOF
+                                success "Created fallback .zshrc"
+                        fi
+        fi
         if [[ -f "$SCRIPT_DIR/.zshrc.help.md" ]]; then backup "$HOME/.zshrc.help.md"; ln -sf "$SCRIPT_DIR/.zshrc.help.md" "$HOME/.zshrc.help.md"; success "symlink help"; fi
     fi
 }
