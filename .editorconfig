@@ -84,4 +84,3 @@ insert_final_newline = true
 # VS Code: disable auto-detection that could fight these settings
 [*.sh]
 end_of_line = lf
-
