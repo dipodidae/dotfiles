@@ -475,21 +475,41 @@ disable-spend-cloud() {
 #   0 on success, 1 if help file not found
 #######################################
 help() {
-  local help_file="${HOME}/.zshrc.help.md"
+  # Determine which help file to show based on SpendCloud enablement.
+  # Priority:
+  #   1. If SpendCloud module loaded (marker var) or ENABLE_SPEND_CLOUD set AND full help exists -> full
+  #   2. Else minimal help (if exists)
+  #   3. Else fallback to full path missing notice
+  local full_help minimal_help chosen
+  full_help="${HOME}/.zshrc.help.md"
+  minimal_help="${HOME}/.zshrc.help.minimal.md"
 
-  if [[ ! -f "${help_file}" ]]; then
-    echo "Help file not found at ${help_file}"
-    echo "Please run the installer to set up documentation."
+  if [[ -n "${_SPEND_CLOUD_MODULE_LOADED:-}" || -n "${ENABLE_SPEND_CLOUD:-}" ]]; then
+    if [[ -f "${full_help}" ]]; then
+      chosen="${full_help}"
+    elif [[ -f "${minimal_help}" ]]; then
+      chosen="${minimal_help}"
+    fi
+  else
+    if [[ -f "${minimal_help}" ]]; then
+      chosen="${minimal_help}"
+    elif [[ -f "${full_help}" ]]; then
+      chosen="${full_help}"
+    fi
+  fi
+
+  if [[ -z "${chosen}" ]]; then
+    echo "Help files missing. Expected one of: ${full_help} or ${minimal_help}"
+    echo "Re-run installer or pull latest dotfiles." >&2
     return 1
   fi
 
   if command -v glow > /dev/null 2>&1; then
     # shellcheck disable=SC2002
-    cat "${help_file}" | glow -
+    cat "${chosen}" | glow -
   else
-    echo "Error: glow is not installed. Please run the installer to set up the complete environment."
-    echo "Fallback: cat ${help_file}"
-    cat "${help_file}"
+    echo "(glow not installed; using cat) Showing: ${chosen}" >&2
+    cat "${chosen}"
   fi
 }
 

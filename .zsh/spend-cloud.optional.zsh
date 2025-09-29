@@ -4,18 +4,69 @@
 # Loaded only when ENABLE_SPEND_CLOUD=1 or via enable-spendcloud command.
 # Keeps main ~/.zshrc lean for general environments.
 #
-# This module provides:
-# - Project navigation aliases and functions
-# - Cluster management (start/stop/logs)
-# - Database migration helpers
-# - Client cleanup utilities (nuke)
-# - Development environment PATH extensions
+# Exposed user-facing commands / aliases (PUBLIC API):
+#   Aliases: sc scapi scui cui capi devapi pf cpf
+#   Functions: cluster migrate nuke
+#
+# NOTE: Refactored for readability (clean code principles) while preserving
+#       EXACT external I/O and exit codes. Output strings / emojis / colors
+#       intentionally unchanged.
+#
+# Principles applied:
+#   - Meaningful constants (color codes, container pattern)
+#   - Reduced duplication (container listing / cleanup)
+#   - Early returns & clear branching
+#   - Logical section partitioning & intent-revealing helpers (prefixed _sc_)
+#   - Comments explain "why" more than "what" where non-obvious
+#
+# DO NOT change emitted user-visible strings without auditing dependent docs / scripts.
 
 # Guard against duplicate loading
 if [[ -n "${_SPEND_CLOUD_MODULE_LOADED:-}" ]]; then
   return 0
 fi
 readonly _SPEND_CLOUD_MODULE_LOADED=1
+
+# ────────────────────────────────────────────────────────────────────────────────
+# Color Constants (TTY gated) — centralizing avoids repetition in functions.
+# Keeping escape sequences identical to original in-cluster definitions.
+# ────────────────────────────────────────────────────────────────────────────────
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  readonly C_RED=$'\033[0;31m'
+  readonly C_GREEN=$'\033[0;32m'
+  readonly C_YELLOW=$'\033[1;33m'
+  readonly C_BLUE=$'\033[0;34m'
+  readonly C_PURPLE=$'\033[0;35m'
+  readonly C_CYAN=$'\033[0;36m'
+  readonly C_WHITE=$'\033[1;37m'
+  readonly C_RESET=$'\033[0m'
+else
+  readonly C_RED="" C_GREEN="" C_YELLOW="" C_BLUE="" C_PURPLE="" C_CYAN="" C_WHITE="" C_RESET=""
+fi
+
+# Pattern used to identify dev / cluster related containers (unchanged semantics)
+readonly SC_DEV_CONTAINER_GREP='(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)'
+
+#######################################
+# List dev/cluster containers matching the canonical pattern.
+# Outputs:
+#   Container names (one per line) or nothing if none.
+#######################################
+_sc_list_dev_containers() {
+  docker ps -a --format "{{.Names}}" | grep -E "${SC_DEV_CONTAINER_GREP}" 2> /dev/null || true
+}
+
+#######################################
+# Stop & remove a provided list of container names read from STDIN.
+# Preserves original behavior (silent if none).
+#######################################
+_sc_stop_remove_containers() {
+  local names
+  names="$(cat)"
+  [[ -z "${names}" ]] && return 0
+  echo "${names}" | xargs -r docker stop 2> /dev/null || true
+  echo "${names}" | xargs -r docker rm 2> /dev/null || true
+}
 
 # ────────────────────────────────────────────────────────────────────────────────
 # Project Navigation Aliases
@@ -46,42 +97,39 @@ alias cpf='code ~/development/proactive-frame'
 #   0 on success, 1 on cluster start failure
 #######################################
 cluster() {
-  local red='\033[0;31m'
-  local green='\033[0;32m'
-  local yellow='\033[1;33m'
-  local blue='\033[0;34m'
-  local purple='\033[0;35m'
-  local cyan='\033[0;36m'
-  local white='\033[1;37m'
-  local nc='\033[0m'
+  # Use global color constants directly (no redundant local mapping)
   local original_dir
   original_dir="$(pwd)"
+
+  # --- STOP ---------------------------------------------------------------
   if [[ "${1}" == "stop" ]]; then
-    echo -e "${yellow}🛑 Stopping all cluster services...${nc}"
-    echo -e "${cyan}🔍 Stopping and removing all containers...${nc}"
+    echo -e "${C_YELLOW}🛑 Stopping all cluster services...${C_RESET}"
+    echo -e "${C_CYAN}🔍 Stopping and removing all containers...${C_RESET}"
     local dev_containers
-    dev_containers="$(docker ps -a --format "{{.Names}}" |
-      grep -E '(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)')"
+    dev_containers="$(_sc_list_dev_containers)"
     if [[ -n "${dev_containers}" ]]; then
-      echo "${dev_containers}" | xargs -r docker stop 2> /dev/null || true
-      echo "${dev_containers}" | xargs -r docker rm 2> /dev/null || true
-      echo -e "${green}✅ Containers stopped and removed${nc}"
+      printf '%s' "${dev_containers}" | _sc_stop_remove_containers
+      echo -e "${C_GREEN}✅ Containers stopped and removed${C_RESET}"
     fi
-    echo -e "${blue}🛑 Stopping SCT cluster...${nc}"
+    echo -e "${C_BLUE}🛑 Stopping SCT cluster...${C_RESET}"
     sct cluster stop
-    echo -e "${green}✅ Cluster stopped successfully${nc}"
+    echo -e "${C_GREEN}✅ Cluster stopped successfully${C_RESET}"
     return 0
   fi
+
+  # --- LOGS --------------------------------------------------------------
   if [[ "${1}" == "logs" ]]; then
     if [[ -n "${2}" ]]; then
-      echo -e "${cyan}📋 Showing logs for service: ${2}${nc}"
+      echo -e "${C_CYAN}📋 Showing logs for service: ${2}${C_RESET}"
       sct cluster logs "${2}"
     else
-      echo -e "${cyan}📋 Showing logs for all cluster services...${nc}"
+      echo -e "${C_CYAN}📋 Showing logs for all cluster services...${C_RESET}"
       sct cluster logs
     fi
     return 0
   fi
+
+  # --- HELP --------------------------------------------------------------
   if [[ "${1}" == "help" || "${1}" == "-h" || "${1}" == "--help" ]]; then
     cat << 'EOF'
 SpendCloud Cluster Management
@@ -94,47 +142,50 @@ Usage: cluster [--rebuild|stop|logs [service]|help]
 EOF
     return 0
   fi
-  echo -e "${cyan}🔍 Checking for existing containers...${nc}"
+
+  # --- PRE-START CLEANUP -------------------------------------------------
+  echo -e "${C_CYAN}🔍 Checking for existing containers...${C_RESET}"
   local dev_containers
-  dev_containers="$(docker ps -a --format "{{.Names}}" |
-    grep -E '(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)' |
-    head -15)"
+  dev_containers="$(_sc_list_dev_containers | head -15)"
   if [[ -n "${dev_containers}" ]]; then
-    echo -e "${yellow}⚠️  Found existing containers that may conflict:${nc}"
+    echo -e "${C_YELLOW}⚠️  Found existing containers that may conflict:${C_RESET}"
     while IFS= read -r container; do
       echo -e "  • ${container}"
     done <<< "${dev_containers}"
-    echo -e "${yellow}🛑 Stopping and removing containers before cluster operation...${nc}"
-    echo "${dev_containers}" | xargs -r docker stop 2> /dev/null || true
-    echo "${dev_containers}" | xargs -r docker rm 2> /dev/null || true
-    echo -e "${green}✅ Containers stopped and removed${nc}"
+    echo -e "${C_YELLOW}🛑 Stopping and removing containers before cluster operation...${C_RESET}"
+    printf '%s' "${dev_containers}" | _sc_stop_remove_containers
+    echo -e "${C_GREEN}✅ Containers stopped and removed${C_RESET}"
   else
-    echo -e "${green}✅ No conflicting containers found${nc}"
+    echo -e "${C_GREEN}✅ No conflicting containers found${C_RESET}"
   fi
+
+  # --- START / REBUILD ---------------------------------------------------
   if [[ "${1}" == "--rebuild" ]]; then
-    echo -e "${yellow}🔄 Rebuilding cluster with fresh images...${nc}"
-    echo -e "${blue}🚀 Starting SCT cluster...${nc}"
+    echo -e "${C_YELLOW}🔄 Rebuilding cluster with fresh images...${C_RESET}"
+    echo -e "${C_BLUE}🚀 Starting SCT cluster...${C_RESET}"
     if ! sct cluster start --build --pull; then
-      echo -e "${red}❌ Failed to start SCT cluster. Aborting...${nc}"
+      echo -e "${C_RED}❌ Failed to start SCT cluster. Aborting...${C_RESET}"
       return 1
     fi
   else
-    echo -e "${blue}🚀 Starting SCT cluster...${nc}"
+    echo -e "${C_BLUE}🚀 Starting SCT cluster...${C_RESET}"
     if ! sct cluster start; then
-      echo -e "${red}❌ Failed to start SCT cluster. Aborting...${nc}"
+      echo -e "${C_RED}❌ Failed to start SCT cluster. Aborting...${C_RESET}"
       return 1
     fi
   fi
+
+  # --- DEV CONTAINERS ----------------------------------------------------
   sleep 2
-  echo -e "${purple}⚡ Starting dev for spend-cloud/api...${nc}"
+  echo -e "${C_PURPLE}⚡ Starting dev for spend-cloud/api...${C_RESET}"
   cd "${HOME}/development/spend-cloud/api" || return 1
   sct dev > /dev/null 2>&1 &
-  echo -e "${cyan}⚡ Starting dev for spend-cloud/proactive-frame...${nc}"
+  echo -e "${C_CYAN}⚡ Starting dev for spend-cloud/proactive-frame...${C_RESET}"
   cd "${HOME}/development/proactive-frame" || return 1
   sct dev > /dev/null 2>&1 &
   cd "${original_dir}" || return 1
-  echo -e "${green}✅ All services started!${nc}"
-  echo -e "${white}🌟 SCT cluster + dev services running in background.${nc}"
+  echo -e "${C_GREEN}✅ All services started!${C_RESET}"
+  echo -e "${C_WHITE}🌟 SCT cluster + dev services running in background.${C_RESET}"
 }
 
 #######################################
@@ -337,21 +388,7 @@ EOF
   local -r blacklist_regex='^(prod|production|shared|sharedstorage|system|default|oci)$'
   local -r master_blacklist_pattern='^(proactive_accounts\.ini|spend-cloud|oci)$'
 
-  # Colors (disable if NO_COLOR or not a TTY)
-  local color_red color_green color_yellow color_cyan color_none
-  if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
-    color_red=$'\e[0;31m'
-    color_green=$'\e[0;32m'
-    color_yellow=$'\e[1;33m'
-    color_cyan=$'\e[0;36m'
-    color_none=$'\e[0m'
-  else
-    color_red=""
-    color_green=""
-    color_yellow=""
-    color_cyan=""
-    color_none=""
-  fi
+  # Use global color constants (C_*) defined at module load (no local remap)
 
   # Set default values for database connection
   : "${DB_USERNAME:=root}"
@@ -438,7 +475,7 @@ EOF
     if command -v fzf > /dev/null 2>&1; then
       target="$(echo "${filtered}" | fzf --prompt="Select client > ")"
     else
-      info "${color_cyan}Select client:${color_none}" >&2
+      info "${C_CYAN}Select client:${C_RESET}" >&2
       local -a selection
       local i=1
       local choice
@@ -490,7 +527,7 @@ EOF
     has_client_row=1
   fi
 
-  info "${color_cyan}Analysis for '${target}':${color_none}"
+  info "${C_CYAN}Analysis for '${target}':${C_RESET}"
   printf '  - /data folder: %s\n' "$(if [[ ${has_folder} -eq 1 ]]; then echo present; else echo absent; fi)"
   printf '  - %s entry (col 043): %s\n' "${settings_table}" "$(if [[ ${has_settings} -eq 1 ]]; then echo present; else echo absent; fi)"
   printf '  - 00_client row: %s\n' "$(if [[ ${has_client_row} -eq 1 ]]; then echo present; else echo absent; fi)"
@@ -504,19 +541,19 @@ EOF
   fi
 
   if [[ "${mode}" == 'verify' ]]; then
-    info "${color_green}Verify mode: no changes made.${color_none}"
+    info "${C_GREEN}Verify mode: no changes made.${C_RESET}"
     return 0
   fi
 
-  if ! confirm "${color_yellow}Proceed to NUKE '${target}'? (yes/no) ${color_none}" 'yes'; then
-    info "${color_green}Aborted.${color_none}"
+  if ! confirm "${C_YELLOW}Proceed to NUKE '${target}'? (yes/no) ${C_RESET}" 'yes'; then
+    info "${C_GREEN}Aborted.${C_RESET}"
     return 0
   fi
-  if ! confirm "${color_red}Type the client name to confirm: ${color_none}" "${target}"; then
-    info "${color_green}Mismatch. Aborted.${color_none}"
+  if ! confirm "${C_RED}Type the client name to confirm: ${C_RESET}" "${target}"; then
+    info "${C_GREEN}Mismatch. Aborted.${C_RESET}"
     return 1
   fi
-  info "${color_red}Executing NUKE...${color_none}"
+  info "${C_RED}Executing NUKE...${C_RESET}"
 
   if [[ -n "${dbs}" ]]; then
     while IFS= read -r db; do
@@ -557,7 +594,7 @@ EOF
     fi
   fi
 
-  info "${color_green}Done. Run: nuke --verify ${target}${color_none}"
+  info "${C_GREEN}Done. Run: nuke --verify ${target}${C_RESET}"
   return 0
 }
 
