@@ -1,0 +1,87 @@
+# EditorConfig helps maintain consistent coding styles between different editors and IDEs.
+# Reference: https://editorconfig.org
+# This configuration aligns with the Google Shell Style Guide adaptations used in this repo.
+
+root = true
+
+# Global defaults
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+# Soft wrap / ruler guidance (not enforced by all editors)
+max_line_length = 80
+
+# Shell scripts (bash, zsh, sh)
+[*.{sh,bash,zsh}]
+indent_style = space
+indent_size = 2
+# Keep trailing spaces trimmed; some editors may mis-detect
+shell_variant = bash
+
+# Dotfile shell fragments (no extension)
+[.zshrc]
+indent_style = space
+indent_size = 2
+
+[.zsh/*.zsh]
+indent_style = space
+indent_size = 2
+
+# Makefiles require tab indentation per spec
+[Makefile]
+indent_style = tab
+indent_size = 4
+trim_trailing_whitespace = false
+
+# Markdown (allow deliberate trailing spaces for hard line breaks)
+[*.md]
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = false
+max_line_length = 100
+
+# YAML (pre-commit, CI configs)
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# JSON / JSONC
+[*.{json,jsonc}]
+indent_style = space
+indent_size = 2
+
+# Git attributes / ignore style (keep simple)
+[.gitattributes]
+indent_style = space
+indent_size = 2
+
+[.gitignore]
+indent_style = space
+indent_size = 2
+
+# Scripts without extensions tracked at repo root
+[format-shell]
+indent_style = space
+indent_size = 2
+
+# License or large text blobs (relax width)
+[LICENSE*]
+max_line_length = off
+trim_trailing_whitespace = false
+
+# Optional: treat env files similarly (avoid trimming inside values)
+[*.env]
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = false
+insert_final_newline = true
+
+# Editor-specific overrides (harmless if unsupported)
+# VS Code: disable auto-detection that could fight these settings
+[*.sh]
+end_of_line = lf
+
