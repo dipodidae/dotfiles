@@ -23,7 +23,7 @@ main() {
   echo "Checking shell formatting..."
 
   # Check if any shell files need formatting
-  if ! make format-check >/dev/null 2>&1; then
+  if ! make format-check > /dev/null 2>&1; then
     echo "❌ Shell files need formatting!" >&2
     echo "" >&2
     echo "Fix with one of:" >&2
