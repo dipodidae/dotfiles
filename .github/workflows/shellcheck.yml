@@ -19,6 +19,12 @@ on:
       - '.shfmt.conf'
       - '.pre-commit-config.yaml'
       - '.github/workflows/shellcheck.yml'
+  workflow_dispatch:
+    inputs:
+      full_run:
+        description: 'Run the full shell lint suite now'
+        required: false
+        default: 'true'
 
 jobs:
   lint:
