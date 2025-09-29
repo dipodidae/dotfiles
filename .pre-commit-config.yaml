@@ -1,0 +1,38 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-executables-have-shebangs
+      - id: check-merge-conflict
+  - repo: https://github.com/mvdan/sh
+    rev: v3.9.0
+    hooks:
+      - id: shfmt
+        args: ['-i', '2', '-ci', '-sr']
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.10.0
+    hooks:
+      - id: shellcheck
+        additional_dependencies: []
+        files: |-
+          ^(install\.sh|.*\.sh|\.zshrc|\.zsh/.*\.zsh)$
+        exclude: |-
+          (^|/)vendor/
+
+# Local hooks (optional) for a quick aggregate shell lint run
+  - repo: local
+    hooks:
+      - id: shell-lint-all
+        name: shell-lint-all
+        entry: bash scripts/lint-shell.sh
+        language: system
+        pass_filenames: false
+        stages: [manual]
+      - id: shell-audit-heuristics
+        name: shell-audit-heuristics
+        entry: bash scripts/audit-shell-style.sh
+        language: system
+        pass_filenames: false
+        stages: [manual]

@@ -1,6 +1,11 @@
 #!/usr/bin/env zsh
+# ~/.zshrc - Interactive Zsh configuration for development environment.
+# Applies Google Shell Style Guide concepts where compatible with Zsh
+# (quoting, [[ tests, safer loops, function naming) while retaining
+# zsh-specific features (oh-my-zsh, plugins, prompt frameworks).
 # shellcheck shell=bash disable=SC1071,SC2034,SC1091,SC2164,SC2155,SC2119,SC2120,SC2086,SC2207
-# Note: This is a zsh config file. Some zsh-specific syntax may not be fully compatible with shellcheck.
+# NOTE: Some stylistic Bash-only recommendations (e.g. strict mode with set -euo pipefail)
+# are intentionally omitted because this file configures an interactive shell.
 # Many "issues" reported by shellcheck are normal zsh patterns and don't need fixing.
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -9,6 +14,12 @@
 
 # Oh My Zsh setup
 export ZSH="$HOME/.oh-my-zsh"
+
+# Unalias potentially conflicting names
+for __sc_fn in glp gd gdc pr development repros forks projects dir clone cloned cloner clonef clonep coded serve cluster migrate nuke; do
+  unalias "${__sc_fn}" 2>/dev/null || true
+done
+unset __sc_fn
 
 # Zsh plugins configuration
 plugins=(
@@ -36,7 +47,6 @@ PURE_GIT_PULL=0
 PURE_GIT_UNTRACKED_DIRTY=1
 
 # Feature toggles via zstyle
-zstyle :prompt:pure:git:stash show yes
 zstyle :prompt:pure:environment:nix-shell show no
 
 # Color tweaks
@@ -138,266 +148,48 @@ alias ghci='gh run list -L 1'
 # ────────────────────────────────────────────────────────────────────────────────
 # PROJECT-SPECIFIC SHORTCUTS
 # ────────────────────────────────────────────────────────────────────────────────
-
-# SpendCloud Project Navigation
-alias sc='cd ~/development/spend-cloud'
-alias scapi='sc && cd api'
-alias scui='sc && cd ui'
-alias cui='code ~/development/spend-cloud/ui'
-alias capi='code ~/development/spend-cloud/api'
-alias devapi='scapi && sct dev'
-
-# Proactive Frame Project
-alias pf='cd ~/development/proactive-frame'
-alias cpf='code ~/development/proactive-frame'
+# (moved to optional spend-cloud/proactive module; see ENABLE_SPEND_CLOUD below)
 
 # ────────────────────────────────────────────────────────────────────────────────
-# DEVELOPMENT FUNCTIONS
+# (Development functions cluster, migrate, nuke, git/pr helpers moved to optional module)
+
 # ────────────────────────────────────────────────────────────────────────────────
 
-# SpendCloud Cluster Management
-# Starts the development cluster with all services
-function cluster() {
-  local RED='\033[0;31m'
-  local GREEN='\033[0;32m'
-  local YELLOW='\033[1;33m'
-  local BLUE='\033[0;34m'
-  local PURPLE='\033[0;35m'
-  local CYAN='\033[0;36m'
-  local WHITE='\033[1;37m'
-  local NC='\033[0m'
+# Git helpers & PR
+glp() { local c=${1:-20}; [[ $c =~ ^[0-9]+$ ]] || { echo 'glp: numeric count' >&2; return 2; }; git --no-pager log -"$c"; }
 
-  # Store the original directory
-  local original_dir=$(pwd)
+gd() { if [[ -z "$1" ]]; then git diff --color | diff-so-fancy; else git diff --color -- "$1" | diff-so-fancy; fi }
 
-  # Handle stop command
-  if [[ "$1" == "stop" ]]; then
-    echo -e "${YELLOW}🛑 Stopping all cluster services...${NC}"
+gdc() { if [[ -z "$1" ]]; then git diff --color --cached | diff-so-fancy; else git diff --color --cached -- "$1" | diff-so-fancy; fi }
 
-    # Stop and remove development containers first
-    echo -e "${CYAN}🔍 Stopping and removing all containers...${NC}"
-    local dev_containers=$(docker ps -a --format "{{.Names}}" | grep -E "(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)")
-    if [[ -n "$dev_containers" ]]; then
-      echo "$dev_containers" | xargs -r docker stop 2>/dev/null || true
-      echo "$dev_containers" | xargs -r docker rm 2>/dev/null || true
-      echo -e "${GREEN}✅ Containers stopped and removed${NC}"
-    fi
-
-    # Stop SCT cluster
-    echo -e "${BLUE}🛑 Stopping SCT cluster...${NC}"
-    sct cluster stop
-    echo -e "${GREEN}✅ Cluster stopped successfully${NC}"
-    return 0
+# PR helper: list PRs (arg 'ls') or checkout PR by number.
+pr() {
+  if [[ -z "$1" ]]; then
+    echo 'usage: pr <ls|num>' >&2
+    return 2
   fi
-
-  # Handle logs command
-  if [[ "$1" == "logs" ]]; then
-    if [[ -n "$2" ]]; then
-      echo -e "${CYAN}📋 Showing logs for service: $2${NC}"
-      sct cluster logs "$2"
-    else
-      echo -e "${CYAN}📋 Showing logs for all cluster services...${NC}"
-      sct cluster logs
-    fi
-    return 0
-  fi
-
-  # Handle help command
-  if [[ "$1" == "help" || "$1" == "-h" || "$1" == "--help" ]]; then
-    echo -e "${GREEN}🏢 SpendCloud Cluster Management${NC}"
-    echo ""
-    echo -e "${YELLOW}Usage:${NC}"
-    echo -e "  cluster                    # Start cluster and development services"
-    echo -e "  cluster --rebuild          # Rebuild and start cluster with fresh images"
-    echo -e "  cluster stop              # Stop all cluster and development services"
-    echo -e "  cluster logs [service]    # Show logs for all services or specific service"
-    echo -e "  cluster help              # Show this help message"
-    echo ""
-    echo -e "${BLUE}💡 Automatically manages development containers and SCT cluster${NC}"
-    return 0
-  fi
-
-  # Check for and stop development containers (for start/rebuild commands)
-  echo -e "${CYAN}🔍 Checking for existing containers...${NC}"
-  local dev_containers=$(docker ps -a --format "{{.Names}}" | grep -E "(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)" | head -15)
-
-  if [[ -n "$dev_containers" ]]; then
-    echo -e "${YELLOW}⚠️  Found existing containers that may conflict:${NC}"
-    echo "$dev_containers" | while read -r container; do
-      echo -e "  • $container"
-    done
-    echo -e "${YELLOW}🛑 Stopping and removing containers before cluster operation...${NC}"
-    echo "$dev_containers" | xargs -r docker stop 2>/dev/null || true
-    echo "$dev_containers" | xargs -r docker rm 2>/dev/null || true
-    echo -e "${GREEN}✅ Containers stopped and removed${NC}"
-  else
-    echo -e "${GREEN}✅ No conflicting containers found${NC}"
-  fi
-
-  if [[ "$1" == "--rebuild" ]]; then
-    echo -e "${YELLOW}🔄 Rebuilding cluster with fresh images...${NC}"
-    echo -e "${BLUE}🚀 Starting SCT cluster...${NC}"
-    if ! sct cluster start --build --pull; then
-      echo -e "${RED}❌ Failed to start SCT cluster. Aborting...${NC}"
-      return 1
-    fi
-  else
-    echo -e "${BLUE}🚀 Starting SCT cluster...${NC}"
-    if ! sct cluster start; then
-      echo -e "${RED}❌ Failed to start SCT cluster. Aborting...${NC}"
-      return 1
-    fi
-  fi
-
-  sleep 2
-
-  echo -e "${PURPLE}⚡ Starting dev for spend-cloud/api...${NC}"
-  cd ~/development/spend-cloud/api
-  sct dev > /dev/null 2>&1 &
-
-  echo -e "${CYAN}⚡ Starting dev for spend-cloud/proactive-frame...${NC}"
-  cd ~/development/proactive-frame
-  sct dev > /dev/null 2>&1 &
-
-  # Return to the original directory
-  cd "$original_dir"
-
-  echo -e "${GREEN}✅ All services started!${NC}"
-  echo -e "${WHITE}🌟 SCT cluster is running and dev services are running in the background.${NC}"
-}
-
-# Database Migration Management
-function migrate() {
-  local container
-  container=$(docker ps --format '{{.Names}}' | grep -E 'spend.*cloud.*api|api.*spend.*cloud' | head -1)
-  if [[ -z "$container" ]]; then
-    echo "API container not found. Start with 'cluster'."
-    return 1
-  fi
-  local action="${1:-all}"
-  case "$action" in
-    all)
-      docker exec -it "$container" php artisan migrate-all --groups=customers,proactive_config,proactive-default,sharedStorage ;;
-    customers)
-      docker exec -it "$container" php artisan migrate --path=database/migrations/customers ;;
-    config)
-      docker exec -it "$container" php artisan migrate --path=database/migrations/config ;;
-    shared|sharedstorage)
-      docker exec -it "$container" php artisan migrate --path=database/migrations/sharedStorage ;;
-    rollback)
-      local target="${2:-customers}"
-      case "$target" in
-        customers) docker exec -it "$container" php artisan migrate:rollback --path=database/migrations/customers ;;
-        config) docker exec -it "$container" php artisan migrate:rollback --path=database/migrations/config ;;
-        shared|sharedstorage) docker exec -it "$container" php artisan migrate:rollback --path=database/migrations/sharedStorage ;;
-        *) echo "Invalid rollback target: $target"; return 1 ;;
-      esac
-      ;;
-    help|-h|--help)
-      echo "Usage: migrate [all|customers|config|shared|rollback [customers|config|shared]]"
-      return 0 ;;
-    *)
-      echo "Invalid migrate option: $action"
-      echo "Usage: migrate [all|customers|config|shared|rollback [customers|config|shared]]"
-      return 1 ;;
-  esac
-}
-
-# Git utility functions
-function glp() {
-  git --no-pager log -$1
-}
-
-function gd() {
-  if [[ -z $1 ]]; then
-    git diff --color | diff-so-fancy
-  else
-    git diff --color $1 | diff-so-fancy
-  fi
-}
-
-function gdc() {
-  if [[ -z $1 ]]; then
-    git diff --color --cached | diff-so-fancy
-  else
-    git diff --color --cached $1 | diff-so-fancy
-  fi
-}
-
-# Pull Request management
-function pr() {
-  if [ $1 = "ls" ]; then
+  if [[ "$1" == ls ]]; then
     gh pr list
   else
-    gh pr checkout $1
+    gh pr checkout "$1"
   fi
 }
 
-# ────────────────────────────────────────────────────────────────────────────────
-# DIRECTORY NAVIGATION & MANAGEMENT
-# ────────────────────────────────────────────────────────────────────────────────
+# Directory helpers
+development() { [[ -n "$1" ]] || { echo 'usage: development <dir>' >&2; return 2; }; cd "$HOME/development/$1" || return 1; }
+repros() { [[ -n "$1" ]] || { echo 'usage: repros <dir>' >&2; return 2; }; cd "$HOME/repros/$1" || return 1; }
+forks() { [[ -n "$1" ]] || { echo 'usage: forks <dir>' >&2; return 2; }; cd "$HOME/forks/$1" || return 1; }
+projects() { [[ -n "$1" ]] || { echo 'usage: projects <dir>' >&2; return 2; }; cd "$HOME/projects/$1" || return 1; }
+dir() { [[ -n "$1" ]] || { echo 'usage: dir <new-dir>' >&2; return 2; }; mkdir -p -- "$1" && cd "$1" || return 1; }
 
-function development() {
-  cd ~/development/$1
-}
-
-function repros() {
-  cd ~/repros/$1
-}
-
-function forks() {
-  cd ~/forks/$1
-}
-
-function projects() {
-  cd ~/projects/$1
-}
-
-function dir() {
-  mkdir $1 && cd $1
-}
-
-# ────────────────────────────────────────────────────────────────────────────────
-# REPOSITORY CLONING & CODE MANAGEMENT
-# ────────────────────────────────────────────────────────────────────────────────
-
-function clone() {
-  if [[ -z $2 ]]; then
-    gh repo clone "$@" && cd "$(basename "$1" .git)"
-  else
-    gh repo clone "$@" && cd "$2"
-  fi
-}
-
-# Clone to ~/development and cd to it
-function cloned() {
-  development && clone "$@" && code . && cd ~2
-}
-
-function cloner() {
-  repros && clone "$@" && code . && cd ~2
-}
-
-function clonef() {
-  forks && clone "$@" && code . && cd ~2
-}
-
-function clonep() {
-  projects && clone "$@" && code . && cd ~2
-}
-
-function coded() {
-  development && code "$@" && cd -
-}
-
-function serve() {
-  if [[ -z $1 ]]; then
-    live-server dist
-  else
-    live-server $1
-  fi
-}
-
+# Clone helpers
+clone() { [[ -n "$1" ]] || { echo 'usage: clone <repo> [dir]' >&2; return 2; }; if [[ -z "$2" ]]; then gh repo clone "$@" && cd "$(basename "$1" .git)" || return 1; else gh repo clone "$@" && cd "$2" || return 1; fi }
+cloned() { development && clone "$@" && code . && cd ~2; }
+cloner() { repros && clone "$@" && code . && cd ~2; }
+clonef() { forks && clone "$@" && code . && cd ~2; }
+clonep() { projects && clone "$@" && code . && cd ~2; }
+coded() { development && code "$@" && cd -; }
+serve() { if [[ -z $1 ]]; then live-server dist; else live-server "$1"; fi }
 # ────────────────────────────────────────────────────────────────────────────────
 # SYSTEM ENVIRONMENT SETUP
 # ────────────────────────────────────────────────────────────────────────────────
@@ -406,28 +198,14 @@ function serve() {
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
 # Google Cloud SDK
-if [ -f '/home/tom/google-cloud-sdk/path.zsh.inc' ]; then
+if [[ -f '/home/tom/google-cloud-sdk/path.zsh.inc' ]]; then
   . '/home/tom/google-cloud-sdk/path.zsh.inc'
 fi
-if [ -f '/home/tom/google-cloud-sdk/completion.zsh.inc' ]; then
+if [[ -f '/home/tom/google-cloud-sdk/completion.zsh.inc' ]]; then
   . '/home/tom/google-cloud-sdk/completion.zsh.inc'
 fi
 
-# SpendCloud-specific paths (auto-generated)
-## <SPEND_CLOUD_GCLOUD_BINARY_PATH>
-## Written on 16-01-2025 at 10:22:04
-export PATH="${PATH}:/home/tom/google-cloud-sdk/bin"
-## </SPEND_CLOUD_GCLOUD_BINARY_PATH>
-
-## <SPEND_CLOUD_PATHS>
-## Written on 16-01-2025 at 10:22:08
-export PATH="$PATH:$HOME/.composer/vendor/bin"
-# Add yarn global bin to PATH if yarn is available
-if command -v yarn >/dev/null 2>&1; then
-    export PATH="$PATH:$(yarn global bin)"
-fi
-export PATH="$PATH:$HOME/.local/bin"
-## </SPEND_CLOUD_PATHS>
+# (SpendCloud-specific PATH blocks moved to optional module)
 
 # PNPM package manager
 export PNPM_HOME="$HOME/.local/share/pnpm"
@@ -449,19 +227,36 @@ if command -v pyenv-virtualenv >/dev/null 2>&1 || pyenv commands | grep -q virtu
   eval "$(pyenv virtualenv-init -)"
 fi
 
-# ASDF version manager
-## <SPEND_CLOUD_ASDF>
-## Written on 02-06-2025 at 16:51:11
-if [[ -f "$HOME/.asdf/asdf.sh" ]]; then
-    . "$HOME/.asdf/asdf.sh"
+# (ASDF initialization moved to optional module)
+
+# ────────────────────────────────────────────────────────────────────────────────
+# OPTIONAL PROJECT MODULE LOADER (SpendCloud / Proactive)
+# ────────────────────────────────────────────────────────────────────────────────
+# To enable project-specific functions & aliases, either:
+#   export ENABLE_SPEND_CLOUD=1 (in ~/.zshrc.local or before starting shell)
+#   or run: enable-spend-cloud
+_SPEND_CLOUD_OPT_FILE="$HOME/.zsh/spend-cloud.optional.zsh"
+if [[ -n "${ENABLE_SPEND_CLOUD:-}" && -f "$_SPEND_CLOUD_OPT_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$_SPEND_CLOUD_OPT_FILE"
 fi
-## </SPEND_CLOUD_ASDF>
+enable-spend-cloud() {
+  export ENABLE_SPEND_CLOUD=1
+  if [[ -f "$_SPEND_CLOUD_OPT_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$_SPEND_CLOUD_OPT_FILE"
+    echo "SpendCloud module loaded"
+  else
+    echo "SpendCloud optional file missing: $_SPEND_CLOUD_OPT_FILE" >&2
+  fi
+}
+disable-spend-cloud() { unset ENABLE_SPEND_CLOUD; echo "SpendCloud module disabled (restart shell to fully unload)."; }
 
 # ────────────────────────────────────────────────────────────────────────────────
 # HELP SYSTEM
 # ────────────────────────────────────────────────────────────────────────────────
 
-function help() {
+help() {
   local help_file="$HOME/.zshrc.help.md"
 
   if [[ ! -f "$help_file" ]]; then
@@ -503,4 +298,6 @@ setopt ALWAYS_TO_END
 zstyle ':completion:*' completer _complete _match _approximate
 zstyle ':completion:*:match:*' original only
 zstyle ':completion:*:approximate:*' max-errors 1 numeric
+
+# (All project-specific & destructive helpers now isolated; base shell is lean)
 

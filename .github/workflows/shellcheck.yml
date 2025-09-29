@@ -1,0 +1,60 @@
+name: Shell Lint
+
+on:
+  push:
+    paths:
+      - '**.sh'
+      - '**.bash'
+      - '**.zsh'
+      - '.shellcheckrc'
+      - '.shfmt.conf'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/shellcheck.yml'
+  pull_request:
+    paths:
+      - '**.sh'
+      - '**.bash'
+      - '**.zsh'
+      - '.shellcheckrc'
+      - '.shfmt.conf'
+      - '.pre-commit-config.yaml'
+      - '.github/workflows/shellcheck.yml'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies (shellcheck, shfmt)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y shellcheck
+          if ! command -v shfmt >/dev/null; then
+            curl -sS https://webinstall.dev/shfmt | bash
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          fi
+      - name: Run shellcheck (bash scripts)
+        run: |
+          set -euo pipefail
+          scripts=$(git ls-files '*.sh' '*.bash') || true
+          if [[ -n "$scripts" ]]; then
+            shellcheck $scripts
+          else
+            echo "No bash scripts found"
+          fi
+      - name: Run shellcheck (zsh as bash; non-blocking)
+        run: |
+          set -euo pipefail
+          zfiles=$(git ls-files '*.zsh') || true
+          if [[ -n "$zfiles" ]]; then
+            shellcheck --shell=bash $zfiles || echo "(Advisory) zsh lint produced warnings"
+          else
+            echo "No zsh files found"
+          fi
+      - name: Heuristic audit (headers & main)
+        run: bash scripts/audit-shell-style.sh
+      - name: shfmt formatting diff
+        run: shfmt -d .
+      - name: Summary
+        run: echo "Shell lint + style audit complete."

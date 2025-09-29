@@ -1,0 +1,33 @@
+# ShellCheck configuration approximating enforceable parts of the Google Shell Style Guide.
+#
+# Notes:
+#  - ShellCheck does NOT enforce formatting (indentation, line length, pipeline layout). Use shfmt + custom scripts.
+#  - Many style guide items (function header comments, main() placement, avoiding large scripts) require human/code review.
+#  - Exclusions below are for interactive/zsh oriented config snippets where ShellCheck would otherwise be noisy.
+#  - We keep severity at 'style' to surface everything; CI still fails on any non-excluded finding.
+#
+# HOW THIS FILE IS USED
+#  The lint scripts and CI export SHELLCHECK_OPTS from the cleaned (non-comment) lines of this file.
+#  Each non-comment token below is passed as a flag to shellcheck.
+
+shell=bash
+severity=style
+external-sources=true
+color=always
+
+# ------------------------- EXCLUSIONS (document rationale) -------------------------
+# SC1071: zsh-specific (interactive config uses zsh syntax but parsed as bash for baseline lint)
+# SC1090: dynamic/optional source paths in user env (.zshrc optional modules)
+# SC2034: unused vars (common in shell config exports / prompts)
+# SC2086: intentional word splitting in a few helper functions; reviewed for safety
+# SC2119: function called with no args (acceptable for some wrappers)
+# SC2120: function defined with parameters but called without (interactive convenience)
+# SC2155: declare and assign in one line; acceptable for concise prompt/env setup
+# SC2164: ignoring 'cd' failure acceptable in interactive navigation helpers
+# SC2207: command substitution to array in zsh context (acceptable & clear here)
+disable=SC1071,SC1090,SC2034,SC2086,SC2119,SC2120,SC2155,SC2164,SC2207
+
+# -----------------------------------------------------------------------------------
+# To fine‑tune: remove an exclusion above and fix resulting warnings; keep list minimal.
+# For per-line suppressions prefer an inline directive over broad exclusion when practical:
+#   # shellcheck disable=SCxxxx
