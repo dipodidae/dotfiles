@@ -10,7 +10,7 @@ cd "$ROOT_DIR"
 # Collect files
 mapfile -t SH_FILES < <(git ls-files '*.sh') || true
 if [[ -f .zshrc ]]; then SH_FILES+=(".zshrc"); fi
-while IFS= read -r -d '' f; do SH_FILES+=("$f"); done < <(find .zsh -type f -name '*.zsh' -print0 2>/dev/null || true)
+while IFS= read -r -d '' f; do SH_FILES+=("$f"); done < <(find .zsh -type f -name '*.zsh' -print0 2> /dev/null || true)
 
 if [[ ${#SH_FILES[@]} -eq 0 ]]; then
   echo "No shell files detected" && exit 0
@@ -26,7 +26,7 @@ for f in "${SH_FILES[@]}"; do
 done
 
 echo "== shfmt (style check only) =="
-if command -v shfmt >/dev/null 2>&1; then
+if command -v shfmt > /dev/null 2>&1; then
   if ! shfmt -d -i 2 -ci -sr "${SH_FILES[@]}"; then
     echo "Formatting differences found. Run: scripts/fix-shell.sh" >&2
     FAIL=1

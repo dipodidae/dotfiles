@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#
+# Convenient project-wide shell formatting command
+# Usage: format-shell [--dry-run]
+
+# Find the dotfiles directory (assuming this script is called from anywhere)
+if [[ -f "scripts/format-simple.sh" ]]; then
+  exec "scripts/format-simple.sh" "$@"
+elif [[ -f "${HOME}/.dotfiles/scripts/format-simple.sh" ]]; then
+  exec "${HOME}/.dotfiles/scripts/format-simple.sh" "$@"
+elif [[ -f "/home/tom/projects/dotfiles/scripts/format-simple.sh" ]]; then
+  exec "/home/tom/projects/dotfiles/scripts/format-simple.sh" "$@"
+else
+  echo "Error: Cannot find format-simple.sh script" >&2
+  echo "Please run from dotfiles directory or check installation" >&2
+  exit 1
+fi

@@ -11,9 +11,10 @@ shopt -s nullglob
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-files=( $(git ls-files '*.sh') )
+files=($(git ls-files '*.sh'))
 if [[ ${#files[@]} -eq 0 ]]; then
-  echo "No .sh scripts found"; exit 0
+  echo "No .sh scripts found"
+  exit 0
 fi
 
 missing_headers=()
@@ -21,7 +22,7 @@ missing_main=()
 oversized=()
 
 for f in "${files[@]}"; do
-  total_lines=$(wc -l <"$f" | awk '{print $1}')
+  total_lines=$(wc -l < "$f" | awk '{print $1}')
   # Collect function names (simple regex: start of line, name(), no leading space)
   mapfile -t funs < <(grep -E '^[a-zA-Z_][a-zA-Z0-9_]*\s*\(\)\s*\{' "$f" | sed -E 's/^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(\).*/\1/')
   for fn in "${funs[@]}"; do
@@ -32,7 +33,7 @@ for f in "${files[@]}"; do
       missing_headers+=("$f:$fn")
     fi
   done
-  if (( total_lines > 120 )); then
+  if ((total_lines > 120)); then
     if grep -q '^main\s*()' "$f"; then
       # Require a tail call to main (allow args)
       if ! tail -n 5 "$f" | grep -Eq '^main(\s+"\$@"|\s+\$@|\s*)$'; then
@@ -42,7 +43,7 @@ for f in "${files[@]}"; do
       missing_main+=("$f:no main() defined (script length ${total_lines})")
     fi
   fi
-  if (( total_lines > 400 )); then
+  if ((total_lines > 400)); then
     oversized+=("$f:${total_lines}")
   fi
 done
@@ -63,6 +64,7 @@ if ((${#oversized[@]})); then
   printf '  %s\n' "${oversized[@]}" >&2
 fi
 
-if (( status == 0 )); then
-  echo "Heuristic style audit passed."; else echo "Heuristic style audit flagged issues." >&2; fi
+if ((status == 0)); then
+  echo "Heuristic style audit passed."
+else echo "Heuristic style audit flagged issues." >&2; fi
 exit $status
