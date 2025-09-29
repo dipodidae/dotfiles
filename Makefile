@@ -8,7 +8,7 @@ help:
 	@echo "Available commands:"
 	@echo "  make format      - Format all shell files with 2-space indentation"
 	@echo "  make format-dry  - Preview formatting changes without applying"
-	@echo "  make format-check- Check if files need formatting (exit 1 if needed)"
+	@echo "  make format-check - Check if files need formatting (exit 1 if needed)"
 	@echo "  make lint        - Run shellcheck on all shell files"
 	@echo "  make audit       - Run style audit (Google Shell Style Guide)"
 	@echo "  make install     - Run the dotfiles installer"
