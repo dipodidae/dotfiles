@@ -1,159 +1,187 @@
-## dotfiles
-
-Lean, repeatable developer shell bootstrap (Zsh + Node + modern CLI tooling) with sane defaults and fast idempotent re-runs.
-
-### Quick install (remote)
-```bash
-curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh | bash
-```
-
-### Manual clone (local / symlink mode)
-```bash
-git clone https://github.com/dipodidae/dotfiles.git
-cd dotfiles && ./install.sh
-```
-
-### What's included (auto-installed where possible)
-- Zsh + Oh My Zsh + Pure prompt
-- Zsh plugins: autosuggestions, syntax highlighting, z, you-should-use
-- Git + handy aliases + hub -> gh alias (if hub missing)
-- GitHub CLI (gh)
-- NVM + Node LTS
-- JS tooling: pnpm, ni (nr / nx / nu / nun), diff-so-fancy
-- fzf + integration helpers (fd / bat / tree when packages available)
-- pyenv + latest Python (best effort; skips silently if deps missing)
-- glow (markdown viewer) for in-terminal help (if available)
-- Safe backups of replaced dotfiles to `~/.dotfiles-backup-*`
-- Clean, minimal color logging to `~/.dotfiles-install.log`
+<div align="center">
 
 # dotfiles
 
-![Shell Lint](https://github.com/OWNER/REPO/actions/workflows/shellcheck.yml/badge.svg)
+Lean, repeatable developer shell bootstrap (Zsh + modern JS & CLI tooling) with an optional domain module.
 
-> Opinionated shell environment with unified lint + formatting and heuristic style audits.
+![Shell Lint](https://github.com/dipodidae/dotfiles/actions/workflows/shellcheck.yml/badge.svg)
 
-## Shell style / lint
-
-We enforce a pragmatic subset of the Google Shell Style Guide through:
-
-| Layer | Tool | Purpose |
-|-------|------|---------|
-| Static analysis | ShellCheck | Safety + style warnings (config in `.shellcheckrc`) |
-| Formatting | shfmt | Consistent whitespace & indentation (`.shfmt.conf`) |
-| Heuristic rules | `scripts/audit-shell-style.sh` | Function headers, main() pattern, size hints |
-| Pre-commit | `pre-commit` | Local gate to avoid CI churn |
-| CI | GitHub Actions | Re-validates all of the above on push / PR |
-
-### Quick start
-
-Bootstrap lint tooling (assumes shellcheck + shfmt installed or managed by CI):
-
-```
-pre-commit install --install-hooks
-```
-
-Run full local suite (format, lint, heuristic checks):
-
-```
-scripts/fix-shell.sh   # shfmt + advisory shellcheck
-scripts/lint-shell.sh  # strict shellcheck (fails on issues)
-scripts/audit-shell-style.sh # header + main heuristics
-```
-
-### Heuristic audit
-
-`scripts/audit-shell-style.sh` covers style elements not directly enforced by ShellCheck:
-
-* Missing function header blocks (expects a `#######################################` divider above definitions)
-* Large scripts (>120 lines) should define `main()` and invoke it at end
-* Oversized scripts (>400 lines) reported for potential refactor
-
-Exit status is non‑zero if mandatory heuristics fail (missing headers / main). Oversize warnings do not fail the job.
-
-### ShellCheck configuration
-
-Central flags live in `.shellcheckrc`, consumed uniformly by:
-
-* CI workflow (`.github/workflows/shellcheck.yml`)
-* `scripts/lint-shell.sh` / `scripts/fix-shell.sh`
-* Pre-commit hook execution
-
-Disabled rules (documented rationale):
-
-| Rule | Rationale |
-|------|-----------|
-| SC1071 | Mixed shebang vs. sourcing context (zsh + bash) |
-| SC1090/SC1091 | Dynamic local sourcing patterns |
-| SC2034 | Intentional exported / documented vars |
-| SC2086 | Reviewed intentional word splitting |
-| SC2119/SC2120 | Flexible no-arg function signatures |
-| SC2155 | Concise declare+assign when safe |
-| SC2164 | Manual `cd` error handling in critical spots |
-| SC2207 | Prefer explicit array capture clarity sometimes |
-
-Zsh files are linted in bash mode for broad issues; failures there are advisory only.
-
-### Formatting
-
-`.shfmt.conf` pins formatting style (indent=2, switch case indent, simplify redirects). Run `shfmt -w .` (or rely on `scripts/fix-shell.sh`).
-
-### Pre-commit
-
-Install & run:
-
-```
-pre-commit install
-pre-commit run --all-files
-```
-
-Update hooks:
-
-```
-pre-commit autoupdate
-```
-
-### CI badge note
-
-Replace `OWNER/REPO` in the badge URL above after cloning or forking.
-
-### Contributing
-
-1. Keep functions small and documented.
-2. Prefer `set -euo pipefail` in standalone scripts; interactive shells may relax pieces thoughtfully.
-3. When disabling a ShellCheck rule inline, add a trailing comment why.
-
-### Roadmap (optional niceties)
-
-* Add metrics script (counts functions / lines trend)
-* Optional severity split job (info vs style vs warning)
-* Shell snippet test harness for critical helpers
+</div>
 
 ---
 
-Feel free to cherry-pick components if you only want the lint tooling.
-| pyenv Python missing | Ensure build deps installed, then `pyenv install <version>` |
+## Table of Contents
 
-### Self-test
-The script runs a lightweight self-test (core binaries + .zshrc presence). You can manually rerun key checks:
+1. What & Why
+2. Features
+3. Quick Start
+4. Optional SpendCloud Module
+5. Built‑in Help System (Dual Mode)
+6. Included Tooling Overview
+7. Style, Lint & Quality Gates
+8. Common Commands (Cheat Sheet)
+9. Safety & Destructive Guards
+10. Customization & Local Overrides
+
+---
+
+## 1. What & Why
+
+These dotfiles provision a fast, idempotent development shell that:
+
+* Minimizes manual setup: one command installer, safe re-runs.
+* Encapsulates opinionated aliases & functions for daily Git / JS / navigation tasks.
+* Enforces consistent shell script quality (style + lint + heuristic audits).
+* Provides an opt‑in domain module ("SpendCloud") that cleanly layers extra aliases & functions without polluting a generic environment.
+
+## 2. Features
+
+Core (always available):
+* Zsh + Oh My Zsh + Pure prompt (sub‑second load path)
+* Plugins: autosuggestions, syntax highlighting, z, you-should-use
+* Git & GitHub helpers: rich alias set, PR workflow, diff enhancements
+* Node toolchain: NVM (LTS install), pnpm, `ni`/`nr` universal scripts, diff-so-fancy
+* Python: pyenv bootstrap (best‑effort; skips gracefully if deps missing)
+* fzf integration (with fd / bat / tree when present)
+* `glow`-powered in-terminal documentation (fallback to `cat`)
+* Self-documenting functions (header blocks + consistent patterns)
+* Automated backups of replaced dotfiles: `~/.dotfiles-backup-*`
+
+Optional (activated only when requested):
+* SpendCloud / Proactive Frame development helpers (`cluster`, `migrate`, `nuke`, project aliases)
+* Safe destructive guard rails (confirmation + environment gating)
+
+## 3. Quick Start
+
+Remote curl install (non-interactive):
 ```bash
-command -v zsh git curl gh fzf node || echo "Missing some tools"
+curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh | bash
+exec zsh
+help          # Shows minimal or full help automatically
 ```
 
-### Logs
-`~/.dotfiles-install.log` – append-only, safe to delete between runs.
-
-### Shell style / lint
-All shell scripts target Bash (installer) or Zsh (interactive config) and are kept clean with ShellCheck.
-
-Run lint locally:
+Manual clone (symlink mode):
 ```bash
-shellcheck install.sh
-shellcheck ~/.zshrc   # accepts zsh patterns; suppressions embedded
+git clone https://github.com/dipodidae/dotfiles.git
+cd dotfiles
+./install.sh
+exec zsh
 ```
-Guiding principles follow the Google Shell Style Guide: quoting, [[ ]] tests, avoiding eval, using "$(...)" substitution, and explicit error handling.
 
-### License
-MIT
+Idempotent: rerunning `./install.sh` updates components without clobbering local overrides.
 
-### TL;DR
-Run the one-liner, `exec zsh`, then `help`.
+## 4. Optional SpendCloud Module
+
+Isolated in `~/.zsh/spend-cloud.optional.zsh`; loads only when one of these is true:
+```bash
+export ENABLE_SPEND_CLOUD=1   # before starting shell
+# or
+enable-spend-cloud            # inside an interactive shell
+```
+Disable any time:
+```bash
+disable-spend-cloud
+```
+Adds:
+* Project nav aliases: `sc` `scapi` `scui` `pf` `capi` `cui` `cpf`
+* Cluster lifecycle: `cluster [--rebuild|stop|logs|help]`
+* Migrations: `migrate <mode>` (grouped, debug, targeted, rollback)
+* Guarded cleanup: `nuke` (env + double confirmation)
+
+All outputs preserve strict I/O contracts for reliable scripting.
+
+## 5. Built‑in Help System (Dual Mode)
+
+Command: `help`
+
+| Mode | Trigger | File | Contents |
+|------|---------|------|----------|
+| Minimal | SpendCloud not enabled | `~/.zshrc.help.minimal.md` | Core aliases & workflows |
+| Full | Module enabled/loaded | `~/.zshrc.help.md` | Adds cluster, migration & domain shortcuts |
+
+Uses `glow` if installed; otherwise falls back to plain `cat`.
+
+## 6. Included Tooling Overview
+
+| Area | Tooling | Notes |
+|------|---------|-------|
+| Prompt | Pure | Fast async git status |
+| Git Enhancements | diff-so-fancy, gh | Rich diffs & PR commands |
+| Package Managers | pnpm + `ni`/`nr` | Unified script runner regardless of lockfile |
+| Fuzzy Search | fzf + fd/bat/tree | Auto-integrated enhancements |
+| Python | pyenv | Latest stable (best-effort install) |
+| Docs | glow | Render Markdown help |
+| Shell Quality | ShellCheck, shfmt, audit | Consistency & safety |
+
+## 7. Style, Lint & Quality Gates
+
+Pragmatic subset of Google Shell Style:
+* Central config: `.shellcheckrc`, `.shfmt.conf`
+* Bash scripts (in `lib/` + `scripts/`) use `#!/bin/bash` and `main()` pattern when non-trivial.
+* Heuristic audit (`scripts/audit-shell-style.sh`) checks header blocks, `main()` presence, oversize hints.
+
+Local quality suite:
+```bash
+scripts/fix-shell.sh          # Format + advisory lint
+scripts/lint-shell.sh         # Strict ShellCheck
+scripts/audit-shell-style.sh  # Heuristic checks
+```
+
+Optional pre-commit:
+```bash
+pre-commit install --install-hooks
+```
+
+## 8. Common Commands (Cheat Sheet)
+
+```bash
+# Package / scripts
+s / b / t / w / c   # start, build, test, watch, typecheck
+lint / lintf        # lint & auto-fix
+
+# Git
+gs / gcm / gp       # status / commit / push
+gd / gdc            # diff (working / staged)
+glp 15              # last 15 commits
+pr ls / pr 123      # list PRs / checkout PR 123
+
+# Navigation
+development proj     # cd ~/development/proj
+dir newthing        # mkdir + cd
+
+# Clone shortcuts
+cloned user/repo    # clone to ~/development + open VSCode
+
+# Help
+enable-spend-cloud && help  # full domain help
+help                      # minimal or full automatically
+```
+
+When module enabled:
+```bash
+cluster --rebuild    # rebuild + start dev cluster
+migrate debug         # per-group migration run
+nuke --verify         # safe read-only analysis
+```
+
+## 9. Safety & Destructive Guards
+
+| Feature | Safeguard |
+|---------|-----------|
+| `install.sh` | Timestamped backups of replaced dotfiles |
+| `nuke` | Requires `ENABLE_NUKE=1` + dual confirmations |
+| Cluster cleanup | Controlled regex for container selection |
+| Color output | Auto-disables when not a TTY or `NO_COLOR` set |
+
+## 10. Customization & Local Overrides
+
+Add personal changes in `~/.zshrc.local` (never overwritten). Re-run installer safely anytime.
+
+Disable domain layer per session:
+```bash
+disable-spend-cloud
+```
+
+---
+
+> TL;DR: Run the installer, `exec zsh`, type `help`; optionally `enable-spend-cloud` for domain tooling.
