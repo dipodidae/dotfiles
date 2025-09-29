@@ -156,18 +156,6 @@ alias gsha='git rev-parse HEAD | pbcopy'
 
 alias ghci='gh run list -L 1'
 
-# ────────────────────────────────────────────────────────────────────────────────
-# PROJECT-SPECIFIC SHORTCUTS
-# ────────────────────────────────────────────────────────────────────────────────
-# (moved to optional spend-cloud/proactive module; see ENABLE_SPEND_CLOUD below)
-
-# ────────────────────────────────────────────────────────────────────────────────
-# (Development functions cluster, migrate, nuke, git/pr helpers moved to optional module)
-
-# ────────────────────────────────────────────────────────────────────────────────
-
-# Git helpers & PR
-
 #######################################
 # Display git log with specified number of commits.
 # Arguments:
@@ -443,6 +431,7 @@ if [[ -n "${ENABLE_SPEND_CLOUD:-}" && -f "${_SPEND_CLOUD_OPT_FILE}" ]]; then
   # shellcheck disable=SC1090
   source "${_SPEND_CLOUD_OPT_FILE}"
 fi
+
 #######################################
 # Enable SpendCloud optional module.
 # Globals:

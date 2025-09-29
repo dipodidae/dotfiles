@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # Enhanced shell formatting tool with better feedback and options
 # Enforces 2-space indentation and Google Shell Style Guide formatting
@@ -33,7 +33,7 @@ fi
 # Print usage information
 #######################################
 usage() {
-  cat <<EOF
+  cat << EOF
 ${BOLD}Usage:${RESET} $(basename "$0") [OPTIONS]
 
 ${BOLD}DESCRIPTION:${RESET}
@@ -66,10 +66,10 @@ EOF
 log() {
   local type="$1" message="$2"
   case "$type" in
-    info)    printf "%s[INFO]%s %s\n" "$BLUE" "$RESET" "$message" ;;
+    info) printf "%s[INFO]%s %s\n" "$BLUE" "$RESET" "$message" ;;
     success) printf "%s[✓]%s %s\n" "$GREEN" "$RESET" "$message" ;;
     warning) printf "%s[!]%s %s\n" "$YELLOW" "$RESET" "$message" ;;
-    error)   printf "%s[✗]%s %s\n" "$RED" "$RESET" "$message" >&2 ;;
+    error) printf "%s[✗]%s %s\n" "$RED" "$RESET" "$message" >&2 ;;
   esac
 }
 
@@ -86,7 +86,7 @@ find_shell_files() {
   # Git-tracked .sh files
   while IFS= read -r -d '' file; do
     files+=("$file")
-  done < <(git ls-files -z '*.sh' 2>/dev/null || true)
+  done < <(git ls-files -z '*.sh' 2> /dev/null || true)
 
   # Special files
   [[ -f .zshrc ]] && files+=(".zshrc")
@@ -94,7 +94,7 @@ find_shell_files() {
   # Additional zsh files
   while IFS= read -r -d '' file; do
     files+=("$file")
-  done < <(find .zsh -type f -name '*.zsh' -print0 2>/dev/null || true)
+  done < <(find .zsh -type f -name '*.zsh' -print0 2> /dev/null || true)
 
   # Output files (handle empty array)
   if [[ ${#files[@]} -gt 0 ]]; then
@@ -111,15 +111,15 @@ find_shell_files() {
 #######################################
 needs_formatting() {
   local file="$1"
-  if ! command -v shfmt >/dev/null 2>&1; then
-    return 0  # Assume it needs formatting if we can't check
+  if ! command -v shfmt > /dev/null 2>&1; then
+    return 0 # Assume it needs formatting if we can't check
   fi
 
   # Compare current content with what shfmt would produce
   if shfmt -i "$INDENT_SIZE" -ci -sr "$file" | cmp -s "$file" -; then
-    return 1  # No changes needed
+    return 1 # No changes needed
   else
-    return 0  # Changes needed
+    return 0 # Changes needed
   fi
 }
 
@@ -136,16 +136,32 @@ main() {
   # Parse arguments
   while [[ $# -gt 0 ]]; do
     case $1 in
-      -d|--dry-run) dry_run=true; shift ;;
-      -q|--quiet) quiet=true; shift ;;
-      -f|--force) force=true; shift ;;
-      -h|--help) usage; exit 0 ;;
-      *) log error "Unknown option: $1"; usage >&2; exit 1 ;;
+      -d | --dry-run)
+        dry_run=true
+        shift
+        ;;
+      -q | --quiet)
+        quiet=true
+        shift
+        ;;
+      -f | --force)
+        force=true
+        shift
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *)
+        log error "Unknown option: $1"
+        usage >&2
+        exit 1
+        ;;
     esac
   done
 
   # Check dependencies
-  if ! command -v shfmt >/dev/null 2>&1; then
+  if ! command -v shfmt > /dev/null 2>&1; then
     log error "shfmt not found. Install with: sudo apt install shfmt"
     exit 1
   fi
@@ -200,11 +216,11 @@ main() {
   fi
 
   # Run shellcheck if available (advisory only)
-  if command -v shellcheck >/dev/null 2>&1 && [[ $quiet == false ]]; then
+  if command -v shellcheck > /dev/null 2>&1 && [[ $quiet == false ]]; then
     log info "Running ShellCheck (advisory)..."
     local shellcheck_failed=0
     for file in "${files_to_format[@]}"; do
-      if ! shellcheck "$file" 2>/dev/null; then
+      if ! shellcheck "$file" 2> /dev/null; then
         ((shellcheck_failed++))
       fi
     done

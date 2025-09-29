@@ -1,27 +1,42 @@
-#!/usr/bin/env bash
+#!/bin/bash
 #
 # Git pre-commit hook to enforce shell formatting
 # Install with: ln -sf ../../scripts/pre-commit-hook .git/hooks/pre-commit
 
 set -euo pipefail
 
-# Change to project root
-cd "$(git rev-parse --show-toplevel)"
+#######################################
+# Main function for git pre-commit hook
+# Globals:
+#   None
+# Arguments:
+#   None
+# Outputs:
+#   Writes check results to stdout/stderr
+# Returns:
+#   0 if formatting is good, 1 if formatting needed
+#######################################
+main() {
+  # Change to project root
+  cd "$(git rev-parse --show-toplevel)"
 
-echo "Checking shell formatting..."
+  echo "Checking shell formatting..."
 
-# Check if any shell files need formatting
-if ! make format-check >/dev/null 2>&1; then
-  echo "❌ Shell files need formatting!" >&2
-  echo "" >&2
-  echo "Fix with one of:" >&2
-  echo "  make format" >&2
-  echo "  ./format-shell" >&2
-  echo "  ./scripts/format-simple.sh" >&2
-  echo "" >&2
-  echo "Then stage the changes and commit again." >&2
-  exit 1
-fi
+  # Check if any shell files need formatting
+  if ! make format-check >/dev/null 2>&1; then
+    echo "❌ Shell files need formatting!" >&2
+    echo "" >&2
+    echo "Fix with one of:" >&2
+    echo "  make format" >&2
+    echo "  ./format-shell" >&2
+    echo "  ./scripts/format-simple.sh" >&2
+    echo "" >&2
+    echo "Then stage the changes and commit again." >&2
+    exit 1
+  fi
 
-echo "✅ Shell formatting looks good!"
-exit 0
+  echo "✅ Shell formatting looks good!"
+  exit 0
+}
+
+main "$@"

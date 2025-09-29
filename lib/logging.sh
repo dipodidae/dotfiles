@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Logging & messaging utilities.
 set -Eeuo pipefail
 

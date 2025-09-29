@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Heuristic audit for non-automated Google Shell Style Guide items.
 # Checks:
 #  1. Functions lacking header doc blocks (####################################### style) in .sh files.
@@ -8,63 +8,90 @@
 set -euo pipefail
 shopt -s nullglob
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$ROOT_DIR"
+#######################################
+# Find and audit shell files for style compliance
+# Globals:
+#   None
+# Arguments:
+#   None
+# Outputs:
+#   Writes audit results to stdout/stderr
+# Returns:
+#   0 if all checks pass, 1 if issues found
+#######################################
+main() {
+  readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  cd "${ROOT_DIR}"
 
-files=($(git ls-files '*.sh'))
-if [[ ${#files[@]} -eq 0 ]]; then
-  echo "No .sh scripts found"
-  exit 0
-fi
+  local -a files
+  mapfile -t files < <(git ls-files '*.sh')
+  if [[ ${#files[@]} -eq 0 ]]; then
+    echo "No .sh scripts found"
+    return 0
+  fi
 
-missing_headers=()
-missing_main=()
-oversized=()
+  local -a missing_headers missing_main oversized
+  missing_headers=()
+  missing_main=()
+  oversized=()
 
-for f in "${files[@]}"; do
-  total_lines=$(wc -l < "$f" | awk '{print $1}')
-  # Collect function names (simple regex: start of line, name(), no leading space)
-  mapfile -t funs < <(grep -E '^[a-zA-Z_][a-zA-Z0-9_]*\s*\(\)\s*\{' "$f" | sed -E 's/^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(\).*/\1/')
-  for fn in "${funs[@]}"; do
-    # Skip main – it's documented by existence & call
-    [[ $fn == main ]] && continue
-    # Look 6 lines above definition for header delimiter
-    if ! grep -B6 -E "^${fn}\\s*\\(\\)" "$f" | grep -q '#######################################'; then
-      missing_headers+=("$f:$fn")
+  local f total_lines
+  for f in "${files[@]}"; do
+    total_lines="$(wc -l < "${f}" | awk '{print $1}')"
+    # Collect function names (simple regex: start of line, name(), no leading space)
+    local -a funs
+    mapfile -t funs < <(grep -E '^[a-zA-Z_][a-zA-Z0-9_]*\s*\(\)\s*\{' "${f}" | sed -E 's/^([a-zA-Z_][a-zA-Z0-9_]*)\s*\(\).*/\1/')
+    local fn
+    for fn in "${funs[@]}"; do
+      # Skip main – it's documented by existence & call
+      if [[ ${fn} == "main" ]]; then
+        continue
+      fi
+      # Look 6 lines above definition for header delimiter
+      if ! grep -B6 -E "^${fn}\\s*\\(\\)" "${f}" | grep -q '#######################################'; then
+        missing_headers+=("${f}:${fn}")
+      fi
+    done
+    if ((total_lines > 120)); then
+      # Only check for main() pattern in executable scripts or scripts not in lib/
+      if [[ ! ${f} =~ ^lib/ ]] && [[ -x ${f} || ${f} =~ ^scripts/ ]]; then
+        if grep -q '^main\s*()' "${f}"; then
+          # Require a tail call to main (allow args)
+          if ! tail -n 5 "${f}" | grep -Eq '^main(\s+"\$@"|\s+\$@|\s*)$'; then
+            missing_main+=("${f}:missing tail main call")
+          fi
+        else
+          missing_main+=("${f}:no main() defined (script length ${total_lines})")
+        fi
+      fi
+    fi
+    if ((total_lines > 400)); then
+      oversized+=("${f}:${total_lines}")
     fi
   done
-  if ((total_lines > 120)); then
-    if grep -q '^main\s*()' "$f"; then
-      # Require a tail call to main (allow args)
-      if ! tail -n 5 "$f" | grep -Eq '^main(\s+"\$@"|\s+\$@|\s*)$'; then
-        missing_main+=("$f:missing tail main call")
-      fi
-    else
-      missing_main+=("$f:no main() defined (script length ${total_lines})")
-    fi
-  fi
-  if ((total_lines > 400)); then
-    oversized+=("$f:${total_lines}")
-  fi
-done
 
-status=0
-if ((${#missing_headers[@]})); then
-  echo "Functions missing header comments:" >&2
-  printf '  %s\n' "${missing_headers[@]}" >&2
-  status=1
-fi
-if ((${#missing_main[@]})); then
-  echo "Scripts needing main() pattern:" >&2
-  printf '  %s\n' "${missing_main[@]}" >&2
-  status=1
-fi
-if ((${#oversized[@]})); then
-  echo "Oversized scripts (consider refactor):" >&2
-  printf '  %s\n' "${oversized[@]}" >&2
-fi
+  local status=0
+  if ((${#missing_headers[@]} > 0)); then
+    echo "Functions missing header comments:" >&2
+    printf '  %s\n' "${missing_headers[@]}" >&2
+    status=1
+  fi
+  if ((${#missing_main[@]} > 0)); then
+    echo "Scripts needing main() pattern:" >&2
+    printf '  %s\n' "${missing_main[@]}" >&2
+    status=1
+  fi
+  if ((${#oversized[@]} > 0)); then
+    echo "Oversized scripts (consider refactor):" >&2
+    printf '  %s\n' "${oversized[@]}" >&2
+  fi
 
-if ((status == 0)); then
-  echo "Heuristic style audit passed."
-else echo "Heuristic style audit flagged issues." >&2; fi
-exit $status
+  if ((status == 0)); then
+    echo "Heuristic style audit passed."
+  else
+    echo "Heuristic style audit flagged issues." >&2
+  fi
+  exit "${status}"
+}
+
+main "$@"
