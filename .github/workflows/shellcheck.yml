@@ -55,6 +55,7 @@ jobs:
       - name: Heuristic audit (headers & main)
         run: bash scripts/audit-shell-style.sh
       - name: shfmt formatting diff
-        run: shfmt -d .
+        # Use the same shfmt options as local scripts & pre-commit (see scripts/fix-shell.sh and .pre-commit-config.yaml)
+        run: shfmt -d -i 2 -ci -sr .
       - name: Summary
         run: echo "Shell lint + style audit complete."
