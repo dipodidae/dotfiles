@@ -607,156 +607,242 @@ install_js_tooling() {
 }
 
 #######################################
-# Install assorted developer utilities (fzf, fd, bat, glow, pyenv, etc.)
+# Ensure ~/.local/bin is present on PATH in ~/.zshrc
+# Globals:
+#   HOME
+#   PATH
+# Returns:
+#   0 always
 #######################################
-install_dev_extras() {
-  headline "Dev Utilities (fzf fd bat tree glow pyenv hub alias)"
+ensure_local_bin_path() {
+  # shellcheck disable=SC2016
+  case ":${PATH}:" in
+    *":${HOME}/.local/bin:"*) return 0 ;;
+  esac
+  # shellcheck disable=SC2016
+  echo 'export PATH="$HOME/.local/bin:$PATH"' >> "${HOME}/.zshrc"
+  note "Added ~/.local/bin to PATH"
+}
+
+#######################################
+# Create a symlink if the destination is absent
+# Globals:
+#   DRY_RUN
+# Arguments:
+#   $1 - source path
+#   $2 - destination path
+# Returns:
+#   0 on success, non-zero on failure
+#######################################
+ensure_symlink() {
+  local src="$1" dest="$2"
+  run mkdir -p "$(dirname "${dest}")"
+  if [[ -e "${dest}" ]]; then
+    return 0
+  fi
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    note "(dry-run) ln -s ${src} ${dest}"
+    return 0
+  fi
+  if ln -s "${src}" "${dest}"; then
+    return 0
+  fi
+  return 1
+}
+
+#######################################
+# Handle Debian-specific fd symlink when binary is named fdfind
+# Globals:
+#   HOME
+#   PATH
+# Returns:
+#   0 always
+#######################################
+debian_fd_symlink() {
+  if have fd || ! have fdfind; then
+    return 0
+  fi
+  step "Creating fd symlink for fdfind"
+  if ensure_symlink "$(command -v fdfind)" "${HOME}/.local/bin/fd"; then
+    ensure_local_bin_path
+    if have fd; then
+      success "fd available"
+    else
+      warn "fd symlink not yet in PATH for current session"
+    fi
+  else
+    warn "Failed to create fd symlink"
+  fi
+}
+
+#######################################
+# Handle Debian-specific bat symlink when binary is named batcat
+# Globals:
+#   HOME
+#   PATH
+# Returns:
+#   0 always
+#######################################
+debian_bat_symlink() {
+  if have bat || ! have batcat; then
+    return 0
+  fi
+  step "Creating bat symlink for batcat"
+  if ensure_symlink "/usr/bin/batcat" "${HOME}/.local/bin/bat"; then
+    ensure_local_bin_path
+    if have bat; then
+      success "bat available"
+    else
+      echo 'alias bat=batcat' >> "${HOME}/.zshrc"
+      warn "bat symlink not yet in PATH for current session; alias added"
+    fi
+  else
+    warn "Failed to create bat symlink"
+  fi
+}
+
+#######################################
+# Install fzf/fd/bat/tree packages per platform
+# Globals:
+#   OS_TYPE
+# Returns:
+#   0 always
+#######################################
+install_dev_util_packages() {
   case "${OS_TYPE}" in
     debian)
       ensure_pkgs "fzf stack" fzf fd-find bat tree
-      # Provide canonical 'fd' command (Debian names binary 'fdfind')
-      if have fdfind && ! have fd; then
-        step "Creating fd symlink for fdfind"
-        run mkdir -p "${HOME}/.local/bin"
-        if [[ "${DRY_RUN}" == "1" ]]; then
-          note "(dry-run) ln -s $(command -v fdfind) ${HOME}/.local/bin/fd"
-        else
-          if [[ ! -e "${HOME}/.local/bin/fd" ]]; then
-            ln -s "$(command -v fdfind)" "${HOME}/.local/bin/fd" || warn "Failed to create fd symlink"
-          fi
-        fi
-        # shellcheck disable=SC2016
-        case ":${PATH}:" in
-          *":${HOME}/.local/bin:"*) : ;;
-          *)
-            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "${HOME}/.zshrc"
-            note "Added ~/.local/bin to PATH"
-            ;;
-        esac
-        if have fd; then
-          success "fd available"
-        else
-          warn "fd symlink not yet in PATH for current session"
-        fi
-      fi
-      # Provide "bat" when Debian names binary batcat
-      if ! have bat && have batcat; then
-        step "Creating bat symlink for batcat"
-        run mkdir -p "${HOME}/.local/bin"
-        if [[ "${DRY_RUN}" == "1" ]]; then
-          note "(dry-run) ln -s /usr/bin/batcat ${HOME}/.local/bin/bat"
-        else
-          if [[ ! -e "${HOME}/.local/bin/bat" ]]; then
-            ln -s /usr/bin/batcat "${HOME}/.local/bin/bat" || warn "Failed to create bat symlink"
-          fi
-        fi
-        # shellcheck disable=SC2016
-        case ":${PATH}:" in
-          *":${HOME}/.local/bin:"*) : ;;
-          *)
-            echo 'export PATH="$HOME/.local/bin:$PATH"' >> "${HOME}/.zshrc"
-            note "Added ~/.local/bin to PATH"
-            ;;
-        esac
-        if have bat; then
-          success "bat available"
-        else
-          echo 'alias bat=batcat' >> "${HOME}/.zshrc"
-          warn "bat symlink not yet in PATH for current session; alias added"
-        fi
-      fi
+      debian_fd_symlink
+      debian_bat_symlink
       ;;
     redhat) ensure_pkgs "fzf stack" fzf bat tree fd-find ;;
     arch) ensure_pkgs "fzf stack" fzf bat tree fd ;;
     macos) ensure_pkgs "fzf stack" fzf bat tree fd ;;
     *) warn "Skip fzf stack (manual)" ;;
   esac
-  # glow
-  if ! have glow; then
-    case "${OS_TYPE}" in
-      debian)
-        step "Prepare glow (Charm repo)"
-        if [[ ! -f /etc/apt/keyrings/charm.gpg ]]; then
-          run sudo mkdir -p /etc/apt/keyrings
-          if run bash -c 'curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg'; then
-            success "Charm GPG key added"
-          else
-            warn "Failed to add Charm GPG key"
-          fi
-        fi
-        if [[ ! -f /etc/apt/sources.list.d/charm.list ]]; then
-          if run bash -c 'echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list >/dev/null'; then
-            success "Charm apt repo added"
-          else
-            warn "Failed to write Charm repo list"
-          fi
-        fi
-        if run sudo apt-get update -y; then
-          :
-        else
-          warn "apt update failed for glow repo"
-        fi
-        if pkg_install glow; then
-          success "glow installed"
-        else
-          warn "glow install failed via repo; attempting fallback binary"
-          local glow_version="1.5.1"
-          local arch
-          arch="$(uname -m)"
-          local glow_arch=""
-          local tmpd
-          case "${arch}" in
-            x86_64 | amd64) glow_arch=amd64 ;;
-            aarch64 | arm64) glow_arch=arm64 ;;
-            *)
-              warn "Unsupported arch for glow fallback (${arch})"
-              glow_arch=""
-              ;;
-          esac
-          if [[ -n "${glow_arch}" ]]; then
-            tmpd="$(mktemp -d)" || true
-            if [[ -n "${tmpd}" ]]; then
-              local tar="glow_${glow_version}_linux_${glow_arch}.tar.gz"
-              local url="https://github.com/charmbracelet/glow/releases/download/v${glow_version}/${tar}"
-              step "Downloading glow fallback ${glow_version}"
-              if run curl -fsSL "${url}" -o "${tmpd}/${tar}" && run tar -xzf "${tmpd}/${tar}" -C "${tmpd}" glow; then
-                if [[ -w /usr/local/bin ]]; then
-                  run install -m 0755 "${tmpd}/glow" /usr/local/bin/glow || true
-                else
-                  mkdir -p "${HOME}/.local/bin"
-                  run install -m 0755 "${tmpd}/glow" "${HOME}/.local/bin/glow" || true
-                  case ":${PATH}:" in
-                    *":${HOME}/.local/bin:"*) : ;;
-                    *) note "Add ${HOME}/.local/bin to PATH for glow" ;;
-                  esac
-                fi
-                if have glow; then
-                  success "glow (fallback)"
-                else
-                  warn "glow fallback present but not in PATH"
-                fi
-              else
-                warn "glow fallback download failed"
-              fi
-            fi
-          fi
-        fi
-        ;;
-      arch) pkg_install glow ;;
-      macos) pkg_install glow ;;
-      redhat) pkg_install glow || warn "glow skipped" ;;
-      *) warn "Install glow manually" ;;
-    esac
+}
+
+#######################################
+# Configure Charm repo and install glow on Debian
+# Returns:
+#   0 on success, non-zero on failure
+#######################################
+install_glow_debian() {
+  step "Prepare glow (Charm repo)"
+  if [[ ! -f /etc/apt/keyrings/charm.gpg ]]; then
+    run sudo mkdir -p /etc/apt/keyrings
+    if run bash -c 'curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg'; then
+      success "Charm GPG key added"
+    else
+      warn "Failed to add Charm GPG key"
+    fi
   fi
-  # hub alias
-  if ! have hub && have gh; then
-    grep -q "alias hub=" "${HOME}/.zshrc" 2> /dev/null || echo "alias hub='gh'" >> "${HOME}/.zshrc"
+  if [[ ! -f /etc/apt/sources.list.d/charm.list ]]; then
+    if run bash -c 'echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list >/dev/null'; then
+      success "Charm apt repo added"
+    else
+      warn "Failed to write Charm repo list"
+    fi
   fi
-  # pyenv
+  if ! run sudo apt-get update -y; then
+    warn "apt update failed for glow repo"
+  fi
+  if pkg_install glow; then
+    success "glow installed"
+    return 0
+  fi
+  warn "glow install failed via repo; attempting fallback binary"
+  install_glow_debian_fallback
+}
+
+#######################################
+# Fallback glow installation for Debian using binary tarball
+# Globals:
+#   HOME
+# Returns:
+#   0 on success, non-zero on failure
+#######################################
+install_glow_debian_fallback() {
+  local glow_version="1.5.1"
+  local arch glow_arch="" tmpd tar url
+  arch="$(uname -m)"
+  case "${arch}" in
+    x86_64 | amd64) glow_arch=amd64 ;;
+    aarch64 | arm64) glow_arch=arm64 ;;
+    *)
+      warn "Unsupported arch for glow fallback (${arch})"
+      return 1
+      ;;
+  esac
+  tmpd="$(mktemp -d)" || true
+  if [[ -z "${tmpd}" ]]; then
+    warn "Failed to create temp dir for glow fallback"
+    return 1
+  fi
+  tar="glow_${glow_version}_linux_${glow_arch}.tar.gz"
+  url="https://github.com/charmbracelet/glow/releases/download/v${glow_version}/${tar}"
+  step "Downloading glow fallback ${glow_version}"
+  if run curl -fsSL "${url}" -o "${tmpd}/${tar}" && run tar -xzf "${tmpd}/${tar}" -C "${tmpd}" glow; then
+    if [[ -w /usr/local/bin ]]; then
+      run install -m 0755 "${tmpd}/glow" /usr/local/bin/glow || true
+    else
+      run mkdir -p "${HOME}/.local/bin"
+      run install -m 0755 "${tmpd}/glow" "${HOME}/.local/bin/glow" || true
+      ensure_local_bin_path
+    fi
+    if have glow; then
+      success "glow (fallback)"
+      return 0
+    fi
+    warn "glow fallback present but not in PATH"
+    return 1
+  fi
+  warn "glow fallback download failed"
+  return 1
+}
+
+#######################################
+# Install glow when not already available
+#######################################
+install_glow_if_missing() {
+  if have glow; then
+    return 0
+  fi
+  case "${OS_TYPE}" in
+    debian) install_glow_debian ;;
+    arch) pkg_install glow ;;
+    macos) pkg_install glow ;;
+    redhat) pkg_install glow || warn "glow skipped" ;;
+    *) warn "Install glow manually" ;;
+  esac
+}
+
+#######################################
+# Ensure hub alias exists when gh is present
+#######################################
+alias_hub_to_gh() {
+  if have hub || ! have gh; then
+    return 0
+  fi
+  if ! grep -q "alias hub=" "${HOME}/.zshrc" 2> /dev/null; then
+    echo "alias hub='gh'" >> "${HOME}/.zshrc"
+  fi
+}
+
+#######################################
+# Install pyenv and ensure latest Python is active
+# Globals:
+#   HOME
+#   PATH (modified)
+# Returns:
+#   0 always
+#######################################
+ensure_pyenv_ready() {
   if [[ ! -d "${HOME}/.pyenv" ]]; then
     step "Install pyenv"
     if ! run bash -c 'curl -fsSL https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash'; then
       warn "pyenv installer failed"
+      return
     fi
   else
     note "pyenv present"
@@ -765,36 +851,56 @@ install_dev_extras() {
   export PATH="${PYENV_ROOT}/bin:${PATH}"
   if have pyenv; then
     eval "$(pyenv init - 2> /dev/null)" || true
-    local existing latest highest_installed
-    existing="$(pyenv versions --bare 2> /dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' || true)"
-    latest="$(pyenv install --list 2> /dev/null | grep -E '^[ ]*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' ')"
-    if [[ -z "${latest}" ]]; then
-      warn "Could not determine latest Python 3.x release"
-      return
-    fi
-    if printf '%s\n' "${existing}" | grep -qx "${latest}"; then
-      note "Latest Python ${latest} already installed (selecting)"
-      run pyenv global "${latest}" || true
-      success "Python ${latest} active"
-      return
-    fi
-    step "Installing latest Python ${latest} (pyenv)"
-    install_python_build_deps
-    if run pyenv install -s "${latest}" && run pyenv global "${latest}"; then
-      success "Python ${latest} active"
-    else
-      warn "Failed to build Python ${latest}"
-      if [[ -n "${existing}" ]]; then
-        highest_installed="$(printf '%s\n' "${existing}" | sort -V | tail -1)"
-        if [[ -n "${highest_installed}" ]]; then
-          run pyenv global "${highest_installed}" || true
-          note "Using existing pyenv Python ${highest_installed}"
-        fi
-      else
-        warn "No pyenv Python available; system Python remains"
-      fi
-    fi
+    ensure_latest_pyenv_python
   fi
+}
+
+#######################################
+# Install latest Python via pyenv with fallback to existing versions
+# Returns:
+#   0 always
+#######################################
+ensure_latest_pyenv_python() {
+  local existing latest highest_installed
+  existing="$(pyenv versions --bare 2> /dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+' || true)"
+  latest="$(pyenv install --list 2> /dev/null | grep -E '^[ ]*[0-9]+\.[0-9]+\.[0-9]+$' | tail -1 | tr -d ' ')"
+  if [[ -z "${latest}" ]]; then
+    warn "Could not determine latest Python 3.x release"
+    return
+  fi
+  if printf '%s\n' "${existing}" | grep -qx "${latest}"; then
+    note "Latest Python ${latest} already installed (selecting)"
+    run pyenv global "${latest}" || true
+    success "Python ${latest} active"
+    return
+  fi
+  step "Installing latest Python ${latest} (pyenv)"
+  install_python_build_deps
+  if run pyenv install -s "${latest}" && run pyenv global "${latest}"; then
+    success "Python ${latest} active"
+    return
+  fi
+  warn "Failed to build Python ${latest}"
+  if [[ -n "${existing}" ]]; then
+    highest_installed="$(printf '%s\n' "${existing}" | sort -V | tail -1)"
+    if [[ -n "${highest_installed}" ]]; then
+      run pyenv global "${highest_installed}" || true
+      note "Using existing pyenv Python ${highest_installed}"
+    fi
+  else
+    warn "No pyenv Python available; system Python remains"
+  fi
+}
+
+#######################################
+# Install assorted developer utilities (fzf, fd, bat, glow, pyenv, etc.)
+#######################################
+install_dev_extras() {
+  headline "Dev Utilities (fzf fd bat tree glow pyenv hub alias)"
+  install_dev_util_packages
+  install_glow_if_missing
+  alias_hub_to_gh
+  ensure_pyenv_ready
 }
 
 #######################################
