@@ -427,6 +427,13 @@ fi
 #   export ENABLE_SPEND_CLOUD=1 (in ~/.zshrc.local or before starting shell)
 #   or run: enable-spend-cloud
 _SPEND_CLOUD_OPT_FILE="${HOME}/.zsh/spend-cloud.optional.zsh"
+_SPEND_CLOUD_STATE_FILE="${HOME}/.config/dotfiles/spend-cloud.enabled"
+
+# Restore SpendCloud preference if persisted from a previous session.
+if [[ -z "${ENABLE_SPEND_CLOUD:-}" && -f "${_SPEND_CLOUD_STATE_FILE}" ]]; then
+  ENABLE_SPEND_CLOUD=1
+fi
+
 if [[ -n "${ENABLE_SPEND_CLOUD:-}" && -f "${_SPEND_CLOUD_OPT_FILE}" ]]; then
   # shellcheck disable=SC1090
   source "${_SPEND_CLOUD_OPT_FILE}"
@@ -441,8 +448,10 @@ fi
 #   Status message to stdout or stderr
 #######################################
 enable-spend-cloud() {
-  export ENABLE_SPEND_CLOUD=1
   if [[ -f "${_SPEND_CLOUD_OPT_FILE}" ]]; then
+    export ENABLE_SPEND_CLOUD=1
+    mkdir -p "${_SPEND_CLOUD_STATE_FILE:h}"
+    : > "${_SPEND_CLOUD_STATE_FILE}"
     # shellcheck disable=SC1090
     source "${_SPEND_CLOUD_OPT_FILE}"
     echo "SpendCloud module loaded"
@@ -460,6 +469,7 @@ enable-spend-cloud() {
 #######################################
 disable-spend-cloud() {
   unset ENABLE_SPEND_CLOUD
+  rm -f "${_SPEND_CLOUD_STATE_FILE}"
   echo "SpendCloud module disabled (restart shell to fully unload)."
 }
 

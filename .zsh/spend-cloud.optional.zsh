@@ -46,6 +46,7 @@ fi
 
 # Pattern used to identify dev / cluster related containers (unchanged semantics)
 readonly SC_DEV_CONTAINER_GREP='(spend-cloud.*dev|proactive-frame.*dev|api.*dev|ui.*dev|proactive-frame|spend-cloud-api|spend-cloud-ui)'
+readonly SC_DEV_LOG_DIR="${HOME}/.cache/spend-cloud/logs"
 
 #######################################
 # List dev/cluster containers matching the canonical pattern.
@@ -66,6 +67,32 @@ _sc_stop_remove_containers() {
   [[ -z "${names}" ]] && return 0
   echo "${names}" | xargs -r docker stop 2> /dev/null || true
   echo "${names}" | xargs -r docker rm 2> /dev/null || true
+}
+
+#######################################
+# Launch a dev service in the background from a given directory.
+# Arguments:
+#   $1 - Directory to run from
+#   $2 - Log file prefix
+# Returns:
+#   0 on success, 1 on failure (directory missing or command error)
+#######################################
+_sc_start_dev_service() {
+  local service_dir="${1}"
+  local log_prefix="${2}"
+  if [[ ! -d "${service_dir}" ]]; then
+    echo -e "${C_YELLOW}⚠️  Skipping dev start: directory not found (${service_dir})${C_RESET}"
+    return 0
+  fi
+  mkdir -p "${SC_DEV_LOG_DIR}"
+  (
+    cd "${service_dir}" || exit 1
+    nohup sct dev >> "${SC_DEV_LOG_DIR}/${log_prefix}.log" 2>&1 &
+  ) || {
+    echo -e "${C_RED}❌ Failed to start dev in ${service_dir}${C_RESET}"
+    return 1
+  }
+  return 0
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -97,9 +124,11 @@ alias cpf='code ~/development/proactive-frame'
 #   0 on success, 1 on cluster start failure
 #######################################
 cluster() {
-  # Use global color constants directly (no redundant local mapping)
-  local original_dir
-  original_dir="$(pwd)"
+  # Ensure core tooling exists before proceeding
+  if ! command -v sct > /dev/null 2>&1; then
+    echo -e "${C_RED}❌ 'sct' command not found. Install the SpendCloud CLI (sct) and ensure it is on your PATH.${C_RESET}"
+    return 1
+  fi
 
   # --- STOP ---------------------------------------------------------------
   if [[ "${1}" == "stop" ]]; then
@@ -177,15 +206,24 @@ EOF
 
   # --- DEV CONTAINERS ----------------------------------------------------
   sleep 2
+  local dev_fail=0
   echo -e "${C_PURPLE}⚡ Starting dev for spend-cloud/api...${C_RESET}"
-  cd "${HOME}/development/spend-cloud/api" || return 1
-  sct dev > /dev/null 2>&1 &
+  if ! _sc_start_dev_service "${HOME}/development/spend-cloud/api" "spend-cloud-api"; then
+    dev_fail=1
+  fi
   echo -e "${C_CYAN}⚡ Starting dev for spend-cloud/proactive-frame...${C_RESET}"
-  cd "${HOME}/development/proactive-frame" || return 1
-  sct dev > /dev/null 2>&1 &
-  cd "${original_dir}" || return 1
-  echo -e "${C_GREEN}✅ All services started!${C_RESET}"
-  echo -e "${C_WHITE}🌟 SCT cluster + dev services running in background.${C_RESET}"
+  if ! _sc_start_dev_service "${HOME}/development/proactive-frame" "proactive-frame"; then
+    dev_fail=1
+  fi
+
+  if ((dev_fail == 0)); then
+    echo -e "${C_GREEN}✅ All services started!${C_RESET}"
+    echo -e "${C_WHITE}🌟 SCT cluster + dev services running in background.${C_RESET}"
+    return 0
+  fi
+
+  echo -e "${C_YELLOW}⚠️  Cluster started, but one or more dev services failed to launch. Check logs in ${SC_DEV_LOG_DIR}.${C_RESET}"
+  return 1
 }
 
 #######################################
