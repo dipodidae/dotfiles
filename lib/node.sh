@@ -88,7 +88,15 @@ node::install_lts_retry() {
 # Outputs: version string or empty
 #######################################
 node::get_current_version() {
-  node --version 2> /dev/null | sed 's/^v//'
+  if ! core::have node; then
+    printf '%s\n' ""
+    return 0
+  fi
+
+  local version=""
+  version="$(node --version 2> /dev/null || true)"
+  version="${version#v}"
+  printf '%s\n' "${version}"
 }
 
 #######################################
