@@ -216,7 +216,7 @@ _ssh_transfer_plugin::build_ssh_cmd() {
   (( port != 22 )) && assembled+=(-p "${port}")
   assembled+=("${remote}")
 
-  set -A "${out_name}" -- "${assembled[@]}"
+  set -A "${out_name}" "${assembled[@]}"
 }
 
 #######################################
@@ -249,7 +249,13 @@ _ssh_transfer_plugin::remote_exec() {
     fi
     local remote_script="$3"
     shift 3
-    "${ssh_cmd[@]}" sh -c "${remote_script}" -- "$@"
+    local quoted_script
+    printf -v quoted_script '%q' "${remote_script}"
+    if (( $# > 0 )); then
+      "${ssh_cmd[@]}" sh -c "${quoted_script}" -- "$@"
+    else
+      "${ssh_cmd[@]}" sh -c "${quoted_script}"
+    fi
     return $?
   fi
 
@@ -384,11 +390,13 @@ transfer_ssh_keys() {
   _ssh_transfer_plugin::log_info "Preparing to transfer the following keys to ${remote}:"
   _ssh_transfer_plugin::print_key_summary "${key_files[@]}"
 
-  local prepare_cmd='umask 077 && mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"'
+  local prepare_cmd='umask 077 >/dev/null 2>&1 || true; mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"'
+  _ssh_transfer_plugin::log_info "Ensuring remote ~/.ssh directory exists..."
   if ! _ssh_transfer_plugin::remote_exec "${remote}" "${port}" sh -c "${prepare_cmd}"; then
     _ssh_transfer_plugin::log_error "Failed to prepare remote ~/.ssh directory"
     return 1
   fi
+  _ssh_transfer_plugin::log_info "Remote ~/.ssh directory ready"
 
   local -a scp_base=(scp -p -q)
   (( port != 22 )) && scp_base+=(-P "${port}")
