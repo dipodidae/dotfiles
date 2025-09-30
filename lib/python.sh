@@ -127,7 +127,7 @@ python::ensure_latest() {
 
   local existing latest
   existing="$(python::get_installed_versions)"
-  latest="$(python::get_latest_version)"
+  latest="$(python::get_latest_version | tr -d ' ')"
 
   if [[ -z "${latest}" ]]; then
     warn "Could not determine latest Python"
@@ -144,7 +144,29 @@ python::ensure_latest() {
   step "Installing Python ${latest} (pyenv)"
   python::install_build_deps
 
-  if core::run pyenv install -s "${latest}" && core::run pyenv global "${latest}"; then
+  note "Compiling Python ${latest}; this can take several minutes on low-powered hardware."
+
+  local makeflags=""
+  if core::have nproc; then
+    local jobs
+    jobs="$(nproc 2> /dev/null || echo 1)"
+    if [[ "${jobs}" =~ ^[0-9]+$ && "${jobs}" -gt 1 ]]; then
+      makeflags="-j${jobs}"
+    fi
+  fi
+
+  local -i install_rc=0
+  if [[ -n "${makeflags}" ]]; then
+    if ! core::run env MAKEFLAGS="${makeflags}" pyenv install -s "${latest}"; then
+      install_rc=$?
+    fi
+  else
+    if ! core::run pyenv install -s "${latest}"; then
+      install_rc=$?
+    fi
+  fi
+
+  if ((install_rc == 0)) && core::run pyenv global "${latest}"; then
     success "Python ${latest} active"
   else
     warn "Failed to build Python ${latest}"
@@ -160,6 +182,10 @@ python::ensure_latest() {
 #######################################
 python::setup() {
   headline "Python / pyenv"
+  if [[ "${SKIP_PYTHON:-0}" == "1" ]]; then
+    note "Skipping Python step (--skip-python)"
+    return 0
+  fi
   python::ensure_pyenv
   python::ensure_latest
 }
