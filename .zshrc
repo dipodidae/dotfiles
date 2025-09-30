@@ -15,6 +15,9 @@
 # Oh My Zsh setup
 export ZSH="${HOME}/.oh-my-zsh"
 
+# Add custom plugin directory to fpath for plugin discovery
+fpath+="${HOME}/.zsh/plugins"
+
 # Unalias potentially conflicting names (pre-plugin load) so that if any were
 # previously defined in login shell fragments they don't interfere.
 for __sc_fn in glp gd gdc pr development repros forks projects dir clone cloned cloner clonef clonep coded serve cluster migrate nuke; do
@@ -23,12 +26,14 @@ done
 unset __sc_fn
 
 # Zsh plugins configuration
+# Note: Custom plugins in ~/.zsh/plugins/ are automatically discovered
 plugins=(
   git
   zsh-autosuggestions
   zsh-syntax-highlighting
   zsh-z
   you-should-use
+  spend-cloud
 )
 
 # Load Oh My Zsh if present (avoid hard failure if not installed yet)
@@ -396,7 +401,7 @@ if [[ -f '/home/tom/google-cloud-sdk/completion.zsh.inc' ]]; then
   . '/home/tom/google-cloud-sdk/completion.zsh.inc'
 fi
 
-# (SpendCloud-specific PATH blocks moved to optional module)
+export PATH="${PATH}:${HOME}/google-cloud-sdk/bin"
 
 # PNPM package manager
 export PNPM_HOME="${HOME}/.local/share/pnpm"
@@ -418,60 +423,11 @@ if command -v pyenv-virtualenv > /dev/null 2>&1 || pyenv commands | grep -q virt
   eval "$(pyenv virtualenv-init -)"
 fi
 
-# (ASDF initialization moved to optional module)
-
-# ────────────────────────────────────────────────────────────────────────────────
-# OPTIONAL PROJECT MODULE LOADER (SpendCloud / Proactive)
-# ────────────────────────────────────────────────────────────────────────────────
-# To enable project-specific functions & aliases, either:
-#   export ENABLE_SPEND_CLOUD=1 (in ~/.zshrc.local or before starting shell)
-#   or run: enable-spend-cloud
-_SPEND_CLOUD_OPT_FILE="${HOME}/.zsh/spend-cloud.optional.zsh"
-_SPEND_CLOUD_STATE_FILE="${HOME}/.config/dotfiles/spend-cloud.enabled"
-
-# Restore SpendCloud preference if persisted from a previous session.
-if [[ -z "${ENABLE_SPEND_CLOUD:-}" && -f "${_SPEND_CLOUD_STATE_FILE}" ]]; then
-  ENABLE_SPEND_CLOUD=1
+# ASDF version manager (optional)
+if [[ -f "${HOME}/.asdf/asdf.sh" ]]; then
+  # shellcheck disable=SC1091
+  . "${HOME}/.asdf/asdf.sh"
 fi
-
-if [[ -n "${ENABLE_SPEND_CLOUD:-}" && -f "${_SPEND_CLOUD_OPT_FILE}" ]]; then
-  # shellcheck disable=SC1090
-  source "${_SPEND_CLOUD_OPT_FILE}"
-fi
-
-#######################################
-# Enable SpendCloud optional module.
-# Globals:
-#   ENABLE_SPEND_CLOUD
-#   _SPEND_CLOUD_OPT_FILE
-# Outputs:
-#   Status message to stdout or stderr
-#######################################
-enable-spend-cloud() {
-  if [[ -f "${_SPEND_CLOUD_OPT_FILE}" ]]; then
-    export ENABLE_SPEND_CLOUD=1
-    mkdir -p "${_SPEND_CLOUD_STATE_FILE:h}"
-    : > "${_SPEND_CLOUD_STATE_FILE}"
-    # shellcheck disable=SC1090
-    source "${_SPEND_CLOUD_OPT_FILE}"
-    echo "SpendCloud module loaded"
-  else
-    echo "SpendCloud optional file missing: ${_SPEND_CLOUD_OPT_FILE}" >&2
-  fi
-}
-
-#######################################
-# Disable SpendCloud optional module.
-# Globals:
-#   ENABLE_SPEND_CLOUD
-# Outputs:
-#   Status message to stdout
-#######################################
-disable-spend-cloud() {
-  unset ENABLE_SPEND_CLOUD
-  rm -f "${_SPEND_CLOUD_STATE_FILE}"
-  echo "SpendCloud module disabled (restart shell to fully unload)."
-}
 
 # ────────────────────────────────────────────────────────────────────────────────
 # HELP SYSTEM
@@ -547,4 +503,14 @@ zstyle ':completion:*' completer _complete _match _approximate
 zstyle ':completion:*:match:*' original only
 zstyle ':completion:*:approximate:*' max-errors 1 numeric
 
-# (All project-specific & destructive helpers now isolated; base shell is lean)
+export PATH="${PATH}:${HOME}/.composer/vendor/bin"
+if command -v yarn > /dev/null 2>&1; then
+  export PATH="${PATH}:$(yarn global bin)"
+fi
+export PATH="${PATH}:${HOME}/.local/bin"
+
+# ASDF version manager (optional)
+if [[ -f "${HOME}/.asdf/asdf.sh" ]]; then
+  # shellcheck disable=SC1091 # optional ASDF environment script (dynamic, may not exist)
+  . "${HOME}/.asdf/asdf.sh"
+fi

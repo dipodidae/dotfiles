@@ -74,6 +74,68 @@ zsh::install_plugin() {
 }
 
 #######################################
+# zsh::install_spend_cloud_plugin
+# Install custom spend-cloud plugin from local dotfiles or remote repo.
+# Arguments:
+#   1 - base plugins directory path
+# Globals:
+#   SCRIPT_DIR
+#   REPO_URL (for remote installs)
+# Outputs:
+#   Step/success/warn/note messages
+# Returns:
+#   0 on success or skip, 1 on failure
+#######################################
+zsh::install_spend_cloud_plugin() {
+  local base="$1"
+  local target="${base}/spend-cloud"
+  local source="${SCRIPT_DIR}/.zsh/plugins/spend-cloud"
+
+  if [[ -d "${target}" ]]; then
+    note "spend-cloud present"
+    return 0
+  fi
+
+  step "Plugin spend-cloud (custom)"
+
+  # Remote install: download from GitHub
+  if core::is_remote_install; then
+    local base_url="${REPO_URL:-https://raw.githubusercontent.com/dipodidae/dotfiles/main}"
+    local plugin_file="${base_url}/.zsh/plugins/spend-cloud/spend-cloud.plugin.zsh"
+
+    # Create plugin directory
+    if ! core::run mkdir -p "${target}"; then
+      warn "spend-cloud directory creation failed"
+      return 1
+    fi
+
+    # Download main plugin file
+    if core::download "${plugin_file}" "${target}/spend-cloud.plugin.zsh"; then
+      success "spend-cloud (custom, remote)"
+      return 0
+    else
+      warn "spend-cloud download failed"
+      core::run rm -rf "${target}"
+      return 1
+    fi
+  fi
+
+  # Local install: copy from dotfiles repo
+  if [[ ! -d "${source}" ]]; then
+    warn "spend-cloud plugin source not found at ${source}"
+    return 1
+  fi
+
+  if core::run cp -r "${source}" "${target}"; then
+    success "spend-cloud (custom, local)"
+    return 0
+  else
+    warn "spend-cloud copy failed"
+    return 1
+  fi
+}
+
+#######################################
 # zsh::install_plugins
 # Clone or update all configured zsh plugins.
 # Outputs:
@@ -96,6 +158,9 @@ zsh::install_plugins() {
     url="${entry#*=}"
     zsh::install_plugin "$name" "$url" "$base"
   done
+
+  # Install custom spend-cloud plugin (from local dotfiles or skip if remote)
+  zsh::install_spend_cloud_plugin "${base}"
 }
 
 #######################################
