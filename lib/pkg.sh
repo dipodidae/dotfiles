@@ -1,73 +1,75 @@
 #!/bin/bash
-# Package management abstraction.
-set -Eeuo pipefail
+# Package management utilities.
+# shellcheck shell=bash
 
-#######################################
-# apt_update_once
-# Runs apt-get update once per process (guards with _APT_UPDATED flag) on Debian.
-# Globals: _APT_UPDATED
-#######################################
-apt_update_once() {
-  if [[ "${_APT_UPDATED:-0}" == "0" ]]; then
-    sudo apt-get update -y
-    _APT_UPDATED=1
-  fi
-}
+declare -g _PKG_APT_UPDATED=0
 
-#######################################
-# pkg_install
-# Cross-distro package install abstraction; chooses package manager by $OS_TYPE.
-# Arguments: package names
-# Globals: OS_TYPE
-#######################################
-pkg_install() {
-  local -a pkgs=("$@")
-  if [[ ${#pkgs[@]} -eq 0 ]]; then
+pkg::apt_update_once() {
+  if [[ "${_PKG_APT_UPDATED}" == "1" ]]; then
     return 0
   fi
+  core::sudo apt-get update -y
+  _PKG_APT_UPDATED=1
+}
+
+pkg::ensure_homebrew() {
+  if core::have brew; then
+    return 0
+  fi
+  step "Installing Homebrew"
+  core::run /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /dev/null
+}
+
+pkg::install() {
+  local -a pkgs=("$@")
+  [[ ${#pkgs[@]} -gt 0 ]] || return 0
   case "${OS_TYPE}" in
     debian)
-      apt_update_once
-      sudo apt-get install -y "${pkgs[@]}"
+      pkg::apt_update_once
+      core::sudo apt-get install -y "${pkgs[@]}"
       ;;
     redhat)
-      if command -v dnf > /dev/null 2>&1; then
-        sudo dnf install -y "${pkgs[@]}"
+      if core::have dnf; then
+        core::sudo dnf install -y "${pkgs[@]}"
       else
-        sudo yum install -y "${pkgs[@]}"
+        core::sudo yum install -y "${pkgs[@]}"
       fi
       ;;
     arch)
-      sudo pacman -S --noconfirm --needed "${pkgs[@]}"
+      core::sudo pacman -S --noconfirm --needed "${pkgs[@]}"
       ;;
     macos)
-      if ! command -v brew > /dev/null 2>&1; then
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /dev/null
-      fi
-      brew install "${pkgs[@]}"
+      pkg::ensure_homebrew
+      core::run brew install "${pkgs[@]}"
       ;;
     *)
-      return 0
+      warn "Package install unsupported for ${OS_TYPE}"
+      return 1
       ;;
   esac
 }
 
-#######################################
-# ensure_pkgs
-# Idempotently installs a labeled group of packages, logging success/failure.
-# Arguments: label pkgs...
-#######################################
-ensure_pkgs() {
+pkg::ensure_group() {
   local label="$1"
   shift
   local -a pkgs=("$@")
-  if [[ ${#pkgs[@]} -eq 0 ]]; then
-    return 0
-  fi
+  [[ ${#pkgs[@]} -gt 0 ]] || return 0
   step "Installing ${label} (${pkgs[*]})"
-  if pkg_install "${pkgs[@]}"; then
+  if pkg::install "${pkgs[@]}"; then
     success "${label} ready"
   else
-    warn "${label} partial/failed"
+    warn "${label} failed"
   fi
+}
+
+pkg::ensure_apt_repo() {
+  local name="$1" key_url="$2" repo_line="$3"
+  core::sudo mkdir -p /etc/apt/keyrings
+  if [[ ! -f "/etc/apt/keyrings/${name}.gpg" ]]; then
+    core::run bash -c "curl -fsSL '${key_url}' | sudo gpg --dearmor -o /etc/apt/keyrings/${name}.gpg"
+  fi
+  if [[ ! -f "/etc/apt/sources.list.d/${name}.list" ]]; then
+    core::run bash -c "echo '${repo_line}' | sudo tee /etc/apt/sources.list.d/${name}.list >/dev/null"
+  fi
+  pkg::apt_update_once
 }

@@ -1,6 +1,5 @@
 #!/bin/bash
 # Logging & messaging utilities.
-set -Eeuo pipefail
 
 #######################################
 # _ts
