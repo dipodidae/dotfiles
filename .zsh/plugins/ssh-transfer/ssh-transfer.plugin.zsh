@@ -3,10 +3,7 @@
 # ssh-transfer plugin: copy local SSH key pairs to a remote ~/.ssh directory
 # without overwriting existing files. Provides the `transfer-ssh-keys` command.
 
-# Guard against duplicate sourcing
-if [[ -n "${_SSH_TRANSFER_PLUGIN_LOADED:-}" ]]; then
-  return 0
-fi
+# Allow re-sourcing (overwrite existing definitions)
 typeset -g _SSH_TRANSFER_PLUGIN_LOADED=1
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
@@ -75,6 +72,13 @@ _ssh_transfer_plugin::print_pair_block() {
   printf '\n'
 }
 
+#######################################
+# Print a colorized summary of detected SSH key pairs.
+# Arguments:
+#   * - Absolute paths to key files.
+# Returns:
+#   0 always.
+#######################################
 _ssh_transfer_plugin::print_key_summary() {
   emulate -L zsh
   setopt local_options pipefail
@@ -86,8 +90,8 @@ _ssh_transfer_plugin::print_key_summary() {
     return 0
   fi
 
-  typeset -A priv_map
-  typeset -A pub_map
+  local -A priv_map
+  local -A pub_map
 
   local file base key
   for file in "${files[@]}"; do
@@ -132,13 +136,22 @@ overwriting existing files. Only private/public key pairs are transferred.
 EOF
 }
 
+#######################################
+# Collect local SSH key pairs from ~/.ssh.
+# Globals:
+#   HOME
+# Arguments:
+#   1 - Name of the array variable to receive key paths.
+# Returns:
+#   0 on success, 1 if no keys are found or an error occurs.
+#######################################
 _ssh_transfer_plugin::collect_keys() {
   emulate -L zsh
   setopt local_options null_glob pipefail
 
   local out_name="$1"
   local key_dir="${HOME}/.ssh"
-  typeset -a privates publics seen
+  local -a privates publics seen
 
   if [[ ! -d "${key_dir}" ]]; then
     _ssh_transfer_plugin::log_error "Local ~/.ssh directory not found"
@@ -182,6 +195,17 @@ _ssh_transfer_plugin::collect_keys() {
   return 0
 }
 
+#######################################
+# Build the SSH command array used for remote execution.
+# Arguments:
+#   1 - Name of the array variable to populate.
+#   2 - Remote destination (user@host).
+#   3 - SSH port.
+# Outputs:
+#   Populates the provided array variable with the ssh command.
+# Returns:
+#   0 always.
+#######################################
 _ssh_transfer_plugin::build_ssh_cmd() {
   emulate -L zsh
   setopt local_options pipefail
@@ -195,19 +219,53 @@ _ssh_transfer_plugin::build_ssh_cmd() {
   set -A "${out_name}" -- "${assembled[@]}"
 }
 
+#######################################
+# Execute a command on the remote host over SSH.
+# Arguments:
+#   1 - Remote destination (user@host).
+#   2 - SSH port.
+#   3+ - Command and arguments to run remotely.
+# Returns:
+#   Status code from the ssh invocation.
+#######################################
 _ssh_transfer_plugin::remote_exec() {
   emulate -L zsh
   setopt local_options pipefail
   local remote="$1" port="$2"
   shift 2
   local -a ssh_cmd
+
   _ssh_transfer_plugin::build_ssh_cmd ssh_cmd "${remote}" "${port}"
-  if (( $# > 0 )); then
-    ssh_cmd+=("$@")
+
+  if (( $# == 0 )); then
+    "${ssh_cmd[@]}"
+    return $?
   fi
-  "${ssh_cmd[@]}"
+
+  if [[ "$1" == "sh" && "${2:-}" == "-c" ]]; then
+    if (( $# < 3 )); then
+      _ssh_transfer_plugin::log_error "remote_exec missing command string for sh -c"
+      return 1
+    fi
+    local remote_script="$3"
+    shift 3
+    "${ssh_cmd[@]}" sh -c "${remote_script}" -- "$@"
+    return $?
+  fi
+
+  "${ssh_cmd[@]}" "$@"
+  return $?
 }
 
+#######################################
+# Determine whether a file already exists on the remote host.
+# Arguments:
+#   1 - Remote destination (user@host).
+#   2 - SSH port.
+#   3 - Filename within the remote ~/.ssh directory.
+# Returns:
+#   0 if the file exists, non-zero otherwise.
+#######################################
 _ssh_transfer_plugin::remote_exists() {
   emulate -L zsh
   setopt local_options pipefail
@@ -217,6 +275,15 @@ _ssh_transfer_plugin::remote_exists() {
   _ssh_transfer_plugin::remote_exec "${remote}" "${port}" sh -c "${remote_cmd}"
 }
 
+#######################################
+# Apply secure permissions to a remote SSH key file.
+# Arguments:
+#   1 - Remote destination (user@host).
+#   2 - SSH port.
+#   3 - Filename within the remote ~/.ssh directory.
+# Returns:
+#   0 on success, non-zero on failure.
+#######################################
 _ssh_transfer_plugin::set_remote_permissions() {
   emulate -L zsh
   setopt local_options pipefail
@@ -232,6 +299,15 @@ _ssh_transfer_plugin::set_remote_permissions() {
 # PUBLIC COMMAND
 # ────────────────────────────────────────────────────────────────────────────────
 
+#######################################
+# Copy local SSH key pairs to a remote ~/.ssh directory.
+# Arguments:
+#   * - Remote destination and optional flags.
+# Outputs:
+#   Logs progress information to stdout/stderr.
+# Returns:
+#   0 on success, non-zero on failure.
+#######################################
 transfer_ssh_keys() {
   emulate -L zsh
   setopt local_options pipefail
@@ -305,8 +381,8 @@ transfer_ssh_keys() {
     return 0
   fi
 
-    _ssh_transfer_plugin::log_info "Preparing to transfer the following keys to ${remote}:"
-    _ssh_transfer_plugin::print_key_summary "${key_files[@]}"
+  _ssh_transfer_plugin::log_info "Preparing to transfer the following keys to ${remote}:"
+  _ssh_transfer_plugin::print_key_summary "${key_files[@]}"
 
   local prepare_cmd='umask 077 && mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"'
   if ! _ssh_transfer_plugin::remote_exec "${remote}" "${port}" sh -c "${prepare_cmd}"; then

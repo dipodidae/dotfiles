@@ -78,6 +78,7 @@ zsh::install_plugin() {
 # Install custom spend-cloud plugin from local dotfiles or remote repo.
 # Arguments:
 #   1 - base plugins directory path
+#   2 - force refresh flag (optional; default 0)
 # Globals:
 #   SCRIPT_DIR
 #   REPO_URL (for remote installs)
@@ -88,15 +89,24 @@ zsh::install_plugin() {
 #######################################
 zsh::install_spend_cloud_plugin() {
   local base="$1"
+  local force="${2:-0}"
   local target="${base}/spend-cloud"
   local source="${SCRIPT_DIR}/.zsh/plugins/spend-cloud"
+  local label="Plugin spend-cloud (custom)"
 
   if [[ -d "${target}" ]]; then
-    note "spend-cloud present"
-    return 0
+    if ((force == 0)); then
+      note "spend-cloud present"
+      return 0
+    fi
+    step "${label} (refresh)"
+    if ! core::run rm -rf "${target}"; then
+      warn "spend-cloud cleanup failed"
+      return 1
+    fi
+  else
+    step "${label}"
   fi
-
-  step "Plugin spend-cloud (custom)"
 
   # Remote install: download from GitHub
   if core::is_remote_install; then
@@ -140,6 +150,7 @@ zsh::install_spend_cloud_plugin() {
 # Install custom ssh-transfer plugin from local dotfiles or remote repo.
 # Arguments:
 #   1 - base plugins directory path
+#   2 - force refresh flag (optional; default 0)
 # Globals:
 #   SCRIPT_DIR
 #   REPO_URL (for remote installs)
@@ -150,15 +161,24 @@ zsh::install_spend_cloud_plugin() {
 #######################################
 zsh::install_ssh_transfer_plugin() {
   local base="$1"
+  local force="${2:-0}"
   local target="${base}/ssh-transfer"
   local source="${SCRIPT_DIR}/.zsh/plugins/ssh-transfer"
+  local label="Plugin ssh-transfer (custom)"
 
   if [[ -d "${target}" ]]; then
-    note "ssh-transfer present"
-    return 0
+    if ((force == 0)); then
+      note "ssh-transfer present"
+      return 0
+    fi
+    step "${label} (refresh)"
+    if ! core::run rm -rf "${target}"; then
+      warn "ssh-transfer cleanup failed"
+      return 1
+    fi
+  else
+    step "${label}"
   fi
-
-  step "Plugin ssh-transfer (custom)"
 
   if core::is_remote_install; then
     local base_url="${REPO_URL:-https://raw.githubusercontent.com/dipodidae/dotfiles/main}"
