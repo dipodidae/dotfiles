@@ -18,10 +18,16 @@
   "[shellscript]": {
     "editor.formatOnSave": true,
     "editor.insertSpaces": true,
-    "editor.tabSize": 2
+    "editor.tabSize": 2,
+    "editor.defaultFormatter": "mkhl.shfmt"
   },
   "[makefile]": {
     "editor.insertSpaces": false
   },
-  "shellcheck.enable": true
+  "shellcheck.enable": true,
+  "shellcheck.executablePath": "shellcheck",
+  "shellcheck.run": "onType",
+  "shfmt.executablePath": "shfmt",
+  "shfmt.caseIndent": true,
+  "shfmt.spaceRedirects": true
 }
