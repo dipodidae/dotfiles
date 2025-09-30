@@ -46,6 +46,52 @@ node::ensure_nvm_installed() {
 }
 
 #######################################
+# node::_with_nounset_disabled
+# Run a command with nounset temporarily disabled.
+# Arguments:
+#   Command and args to execute
+# Outputs:
+#   Passes through stdout/stderr from command
+# Returns:
+#   Exit status of command
+#######################################
+node::_with_nounset_disabled() {
+  local had_nounset=0 rc=0
+  if [[ "$-" == *u* ]]; then
+    had_nounset=1
+    set +u
+  fi
+  "$@"
+  rc=$?
+  if ((had_nounset == 1)); then
+    set -u
+  fi
+  return "${rc}"
+}
+
+#######################################
+# node::_nvm_cmd
+# Execute an nvm subcommand with nounset disabled.
+# Arguments:
+#   NVM subcommand and args
+# Returns:
+#   Exit status of nvm command
+#######################################
+node::_nvm_cmd() {
+  node::_with_nounset_disabled nvm "$@"
+}
+
+#######################################
+# node::_nvm_use_lts
+# Activate Node LTS version without noisy output.
+# Returns:
+#   Exit status of nvm use
+#######################################
+node::_nvm_use_lts() {
+  node::_with_nounset_disabled nvm use --lts > /dev/null
+}
+
+#######################################
 # node::install_lts_retry
 # Install Node LTS with retry logic.
 # Returns:
@@ -53,7 +99,7 @@ node::ensure_nvm_installed() {
 #######################################
 node::install_lts_retry() {
   step "Installing/Updating Node LTS"
-  if ! core::retry_cmd 3 nvm install --lts; then
+  if ! core::retry_cmd 3 node::_nvm_cmd install --lts; then
     warn "Node LTS install failed after retries"
     return 1
   fi
@@ -75,7 +121,9 @@ node::get_current_version() {
 # Outputs: version string or empty
 #######################################
 node::get_lts_version() {
-  nvm version-remote --lts 2> /dev/null | sed 's/^v//'
+  local version=""
+  version="$(node::_with_nounset_disabled nvm version-remote --lts 2> /dev/null || true)"
+  printf '%s\n' "${version#v}"
 }
 
 #######################################
@@ -91,15 +139,13 @@ node::ensure_lts_active() {
     warn "nvm not available"
     return 0
   fi
-  set +u
   local current remote
   current="$(node::get_current_version)"
   remote="$(node::get_lts_version)"
-  set -u
 
   if [[ -z "${current}" ]]; then
     if node::install_lts_retry; then
-      core::run nvm use --lts > /dev/null || true
+      core::run node::_nvm_use_lts || true
     fi
     success "Node $(node::get_current_version)"
     return 0
@@ -111,7 +157,7 @@ node::ensure_lts_active() {
   fi
 
   if node::install_lts_retry; then
-    core::run nvm use --lts > /dev/null || true
+    core::run node::_nvm_use_lts || true
     success "Node updated to $(node::get_current_version)"
   else
     warn "Node LTS update failed (current: ${current:-none})"
