@@ -9,6 +9,22 @@ if [[ -n "${_SSH_TRANSFER_PLUGIN_LOADED:-}" ]]; then
 fi
 typeset -g _SSH_TRANSFER_PLUGIN_LOADED=1
 
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  typeset -g _SSH_TRANSFER_COLOR_RESET=$'\033[0m'
+  typeset -g _SSH_TRANSFER_COLOR_DIM=$'\033[2m'
+  typeset -g _SSH_TRANSFER_COLOR_HEADER=$'\033[38;5;45m'
+  typeset -g _SSH_TRANSFER_COLOR_NAME=$'\033[1;36m'
+  typeset -g _SSH_TRANSFER_COLOR_PRIVATE=$'\033[38;5;83m'
+  typeset -g _SSH_TRANSFER_COLOR_PUBLIC=$'\033[38;5;207m'
+else
+  typeset -g _SSH_TRANSFER_COLOR_RESET=""
+  typeset -g _SSH_TRANSFER_COLOR_DIM=""
+  typeset -g _SSH_TRANSFER_COLOR_HEADER=""
+  typeset -g _SSH_TRANSFER_COLOR_NAME=""
+  typeset -g _SSH_TRANSFER_COLOR_PRIVATE=""
+  typeset -g _SSH_TRANSFER_COLOR_PUBLIC=""
+fi
+
 # ────────────────────────────────────────────────────────────────────────────────
 # INTERNAL HELPERS
 # ────────────────────────────────────────────────────────────────────────────────
@@ -29,6 +45,80 @@ _ssh_transfer_plugin::log_error() {
   printf '❌ %s\n' "$*" >&2
 }
 
+_ssh_transfer_plugin::print_pair_block() {
+  emulate -L zsh
+  setopt local_options pipefail
+
+  local key_name="$1" private_path="$2" public_path="$3"
+
+  printf '%s⌈ %s%s%s ⌉%s\n' \
+    "${_SSH_TRANSFER_COLOR_HEADER}" \
+    "${_SSH_TRANSFER_COLOR_NAME}" "${key_name}" "${_SSH_TRANSFER_COLOR_HEADER}" \
+    "${_SSH_TRANSFER_COLOR_RESET}"
+
+  if [[ -n "${private_path}" ]]; then
+    printf '%s⌊ %s%-4s%s → %s%s%s ⌋%s\n' \
+      "${_SSH_TRANSFER_COLOR_PRIVATE}" \
+      "${_SSH_TRANSFER_COLOR_DIM}" "priv" "${_SSH_TRANSFER_COLOR_PRIVATE}" \
+      "${_SSH_TRANSFER_COLOR_DIM}" "${private_path}" "${_SSH_TRANSFER_COLOR_PRIVATE}" \
+      "${_SSH_TRANSFER_COLOR_RESET}"
+  fi
+
+  if [[ -n "${public_path}" ]]; then
+    printf '%s⌊ %s%-4s%s → %s%s%s ⌋%s\n' \
+      "${_SSH_TRANSFER_COLOR_PUBLIC}" \
+      "${_SSH_TRANSFER_COLOR_DIM}" "pub" "${_SSH_TRANSFER_COLOR_PUBLIC}" \
+      "${_SSH_TRANSFER_COLOR_DIM}" "${public_path}" "${_SSH_TRANSFER_COLOR_PUBLIC}" \
+      "${_SSH_TRANSFER_COLOR_RESET}"
+  fi
+
+  printf '\n'
+}
+
+_ssh_transfer_plugin::print_key_summary() {
+  emulate -L zsh
+  setopt local_options pipefail
+
+  local -a files
+  files=("$@")
+
+  if (( ${#files} == 0 )); then
+    return 0
+  fi
+
+  typeset -A priv_map
+  typeset -A pub_map
+
+  local file base key
+  for file in "${files[@]}"; do
+    base="${file##*/}"
+    if [[ "${base}" == *.pub ]]; then
+      key="${base%.pub}"
+      pub_map["${key}"]="${file}"
+    else
+      key="${base}"
+      priv_map["${key}"]="${file}"
+    fi
+  done
+
+  local -a combined_keys
+  combined_keys=( "${(@k)priv_map}" "${(@k)pub_map}" )
+  combined_keys=( "${(@u)combined_keys}" )
+  combined_keys=( "${(@on)combined_keys}" )
+
+  local key_name
+  for key_name in "${combined_keys[@]}"; do
+    local display_name="${key_name}"
+    display_name="${display_name#\"}"
+    display_name="${display_name%\"}"
+
+    _ssh_transfer_plugin::print_pair_block \
+      "${display_name}" \
+      "${priv_map[$key_name]:-}" \
+      "${pub_map[$key_name]:-}"
+  done
+}
+
 _ssh_transfer_plugin::usage() {
   cat <<'EOF'
 Usage: transfer-ssh-keys <user@host> [options]
@@ -46,9 +136,9 @@ _ssh_transfer_plugin::collect_keys() {
   emulate -L zsh
   setopt local_options null_glob pipefail
 
-  local -n out_ref="$1"
+  local out_name="$1"
   local key_dir="${HOME}/.ssh"
-  local -a privates publics seen
+  typeset -a privates publics seen
 
   if [[ ! -d "${key_dir}" ]]; then
     _ssh_transfer_plugin::log_error "Local ~/.ssh directory not found"
@@ -88,36 +178,43 @@ _ssh_transfer_plugin::collect_keys() {
     return 1
   fi
 
-  out_ref=( "${(@)privates}" "${(@)publics}" )
+  set -A "${out_name}" "${(@)privates}" "${(@)publics}"
   return 0
 }
 
 _ssh_transfer_plugin::build_ssh_cmd() {
   emulate -L zsh
   setopt local_options pipefail
-  local -n out_ref="$1"
+  local out_name="$1"
   local remote="$2" port="$3"
+  local -a assembled=(ssh -o BatchMode=no)
 
-  out_ref=(ssh -o BatchMode=no)
-  (( port != 22 )) && out_ref+=(-p "${port}")
-  out_ref+=("${remote}")
+  (( port != 22 )) && assembled+=(-p "${port}")
+  assembled+=("${remote}")
+
+  set -A "${out_name}" -- "${assembled[@]}"
 }
 
 _ssh_transfer_plugin::remote_exec() {
   emulate -L zsh
   setopt local_options pipefail
-  local remote="$1" port="$2" command="$3"
+  local remote="$1" port="$2"
+  shift 2
   local -a ssh_cmd
   _ssh_transfer_plugin::build_ssh_cmd ssh_cmd "${remote}" "${port}"
-  ssh_cmd+=("${command}")
+  if (( $# > 0 )); then
+    ssh_cmd+=("$@")
+  fi
   "${ssh_cmd[@]}"
 }
 
 _ssh_transfer_plugin::remote_exists() {
   emulate -L zsh
   setopt local_options pipefail
-  local remote="$1" port="$2" target="$3"
-  _ssh_transfer_plugin::remote_exec "${remote}" "${port}" "test -e ${target}"
+  local remote="$1" port="$2" filename="$3"
+  local remote_cmd
+  printf -v remote_cmd 'test -e "$HOME/.ssh/%s"' "${filename}"
+  _ssh_transfer_plugin::remote_exec "${remote}" "${port}" sh -c "${remote_cmd}"
 }
 
 _ssh_transfer_plugin::set_remote_permissions() {
@@ -126,7 +223,9 @@ _ssh_transfer_plugin::set_remote_permissions() {
   local remote="$1" port="$2" filename="$3"
   local mode=600
   [[ "${filename}" == *.pub ]] && mode=644
-  _ssh_transfer_plugin::remote_exec "${remote}" "${port}" "chmod ${mode} ~/.ssh/${filename}"
+  local remote_cmd
+  printf -v remote_cmd 'chmod %d "$HOME/.ssh/%s"' "${mode}" "${filename}"
+  _ssh_transfer_plugin::remote_exec "${remote}" "${port}" sh -c "${remote_cmd}"
 }
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -202,14 +301,15 @@ transfer_ssh_keys() {
 
   if (( dry_run )); then
     _ssh_transfer_plugin::log_info "Dry run: would transfer the following keys to ${remote}:"
-    local file
-    for file in "${key_files[@]}"; do
-      printf '  • %s\n' "${file}"
-    done
+    _ssh_transfer_plugin::print_key_summary "${key_files[@]}"
     return 0
   fi
 
-  if ! _ssh_transfer_plugin::remote_exec "${remote}" "${port}" "mkdir -p ~/.ssh && chmod 700 ~/.ssh"; then
+    _ssh_transfer_plugin::log_info "Preparing to transfer the following keys to ${remote}:"
+    _ssh_transfer_plugin::print_key_summary "${key_files[@]}"
+
+  local prepare_cmd='umask 077 && mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"'
+  if ! _ssh_transfer_plugin::remote_exec "${remote}" "${port}" sh -c "${prepare_cmd}"; then
     _ssh_transfer_plugin::log_error "Failed to prepare remote ~/.ssh directory"
     return 1
   fi
@@ -220,8 +320,13 @@ transfer_ssh_keys() {
   local file base remote_target copied_any=0
   for file in "${key_files[@]}"; do
     base="${file##*/}"
+    if [[ "${base}" == *[^[:alnum:]._-]* ]]; then
+      _ssh_transfer_plugin::log_warn "Skipping ${base} (unsupported characters in filename)"
+      continue
+    fi
+
     remote_target="~/.ssh/${base}"
-    if _ssh_transfer_plugin::remote_exists "${remote}" "${port}" "${remote_target}"; then
+    if _ssh_transfer_plugin::remote_exists "${remote}" "${port}" "${base}"; then
       _ssh_transfer_plugin::log_warn "Skipping ${base} (already exists on remote)"
       continue
     fi
