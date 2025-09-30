@@ -21,6 +21,23 @@ core::run() {
 }
 
 #######################################
+# core::without_nounset
+# Run a command in a subshell with nounset disabled.
+# Arguments:
+#   Command and args to execute
+# Outputs:
+#   Passes through stdout/stderr from command
+# Returns:
+#   Exit status of command
+#######################################
+core::without_nounset() {
+  (
+    set +u
+    "$@"
+  )
+}
+
+#######################################
 # core::sudo
 # sudo wrapper that respects dry-run logging.
 #######################################

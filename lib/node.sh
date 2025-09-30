@@ -46,30 +46,6 @@ node::ensure_nvm_installed() {
 }
 
 #######################################
-# node::_with_nounset_disabled
-# Run a command with nounset temporarily disabled.
-# Arguments:
-#   Command and args to execute
-# Outputs:
-#   Passes through stdout/stderr from command
-# Returns:
-#   Exit status of command
-#######################################
-node::_with_nounset_disabled() {
-  local had_nounset=0 rc=0
-  if [[ "$-" == *u* ]]; then
-    had_nounset=1
-    set +u
-  fi
-  "$@"
-  rc=$?
-  if ((had_nounset == 1)); then
-    set -u
-  fi
-  return "${rc}"
-}
-
-#######################################
 # node::_nvm_cmd
 # Execute an nvm subcommand with nounset disabled.
 # Arguments:
@@ -78,7 +54,7 @@ node::_with_nounset_disabled() {
 #   Exit status of nvm command
 #######################################
 node::_nvm_cmd() {
-  node::_with_nounset_disabled nvm "$@"
+  core::without_nounset nvm "$@"
 }
 
 #######################################
@@ -88,7 +64,7 @@ node::_nvm_cmd() {
 #   Exit status of nvm use
 #######################################
 node::_nvm_use_lts() {
-  node::_with_nounset_disabled nvm use --lts > /dev/null
+  core::without_nounset nvm use --lts > /dev/null
 }
 
 #######################################
@@ -122,7 +98,7 @@ node::get_current_version() {
 #######################################
 node::get_lts_version() {
   local version=""
-  version="$(node::_with_nounset_disabled nvm version-remote --lts 2> /dev/null || true)"
+  version="$(core::without_nounset nvm version-remote --lts 2> /dev/null || true)"
   printf '%s\n' "${version#v}"
 }
 
