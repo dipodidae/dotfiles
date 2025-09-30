@@ -2,6 +2,14 @@
 # Node / NVM / JS tooling helpers.
 # shellcheck shell=bash
 
+#######################################
+# node::load_nvm
+# Source NVM if available.
+# Globals:
+#   NVM_DIR
+# Returns:
+#   0 always
+#######################################
 node::load_nvm() {
   if [[ -z "${NVM_DIR:-}" ]]; then
     return 0
@@ -14,6 +22,15 @@ node::load_nvm() {
   fi
 }
 
+#######################################
+# node::ensure_nvm_installed
+# Install NVM if not present, then load it.
+# Globals:
+#   NVM_VERSION
+#   NVM_DIR (exported)
+# Outputs:
+#   Step/success/warn messages
+#######################################
 node::ensure_nvm_installed() {
   export NVM_DIR="${HOME}/.nvm"
   if [[ -d "${NVM_DIR}" ]]; then
@@ -28,6 +45,12 @@ node::ensure_nvm_installed() {
   fi
 }
 
+#######################################
+# node::install_lts_retry
+# Install Node LTS with retry logic.
+# Returns:
+#   0 on success, 1 on failure after retries
+#######################################
 node::install_lts_retry() {
   step "Installing/Updating Node LTS"
   if ! core::retry_cmd 3 nvm install --lts; then
@@ -37,34 +60,61 @@ node::install_lts_retry() {
   return 0
 }
 
+#######################################
+# node::get_current_version
+# Get current Node version (without 'v' prefix).
+# Outputs: version string or empty
+#######################################
+node::get_current_version() {
+  node --version 2> /dev/null | sed 's/^v//'
+}
+
+#######################################
+# node::get_lts_version
+# Get remote LTS version (without 'v' prefix).
+# Outputs: version string or empty
+#######################################
+node::get_lts_version() {
+  nvm version-remote --lts 2> /dev/null | sed 's/^v//'
+}
+
+#######################################
+# node::ensure_lts_active
+# Ensure Node LTS is installed and active.
+# Outputs:
+#   Step/success/warn messages
+# Returns:
+#   0 always
+#######################################
 node::ensure_lts_active() {
   if ! core::have nvm; then
     warn "nvm not available"
     return 0
   fi
   set +u
-  local current_node remote_lts
-  current_node="$(node --version 2> /dev/null | sed 's/^v//')"
-  remote_lts="$(nvm version-remote --lts 2> /dev/null | sed 's/^v//')"
+  local current remote
+  current="$(node::get_current_version)"
+  remote="$(node::get_lts_version)"
   set -u
-  if [[ -z "${current_node}" ]]; then
+
+  if [[ -z "${current}" ]]; then
     if node::install_lts_retry; then
       core::run nvm use --lts > /dev/null || true
-      success "Node $(node --version 2> /dev/null || echo '?')"
-    else
-      warn "Failed to install Node LTS after retries"
     fi
+    success "Node $(node::get_current_version)"
     return 0
   fi
-  if [[ -n "${remote_lts}" && "${current_node}" == "${remote_lts}" ]]; then
-    note "Node LTS v${current_node} already active"
+
+  if [[ -n "${remote}" && "${current}" == "${remote}" ]]; then
+    note "Node LTS v${current} already active"
     return 0
   fi
+
   if node::install_lts_retry; then
     core::run nvm use --lts > /dev/null || true
-    success "Node updated to $(node --version 2> /dev/null || echo '?')"
+    success "Node updated to $(node::get_current_version)"
   else
-    warn "Node LTS update failed (current: ${current_node:-none})"
+    warn "Node LTS update failed (current: ${current:-none})"
   fi
 }
 
@@ -91,6 +141,12 @@ node::ensure_npm_global() {
   fi
 }
 
+#######################################
+# node::install_global_tools
+# Install essential npm global packages.
+# Outputs:
+#   Step/success/warn messages
+#######################################
 node::install_global_tools() {
   if ! core::have node; then
     warn "Node missing—skip JS tooling"
@@ -101,6 +157,12 @@ node::install_global_tools() {
   node::ensure_npm_global "diff-so-fancy"
 }
 
+#######################################
+# node::setup
+# Main orchestrator for Node/NVM/tooling setup.
+# Outputs:
+#   Headline and delegated messages
+#######################################
 node::setup() {
   headline "Node / JavaScript"
   node::ensure_nvm_installed

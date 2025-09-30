@@ -4,6 +4,14 @@
 
 declare -g _PKG_APT_UPDATED=0
 
+#######################################
+# pkg::apt_update_once
+# Run apt-get update once per session.
+# Globals:
+#   _PKG_APT_UPDATED (modified)
+# Returns:
+#   0 always
+#######################################
 pkg::apt_update_once() {
   if [[ "${_PKG_APT_UPDATED}" == "1" ]]; then
     return 0
@@ -12,6 +20,12 @@ pkg::apt_update_once() {
   _PKG_APT_UPDATED=1
 }
 
+#######################################
+# pkg::ensure_homebrew
+# Install Homebrew if not present (macOS).
+# Returns:
+#   0 on success or if already installed
+#######################################
 pkg::ensure_homebrew() {
   if core::have brew; then
     return 0
@@ -20,6 +34,16 @@ pkg::ensure_homebrew() {
   core::run /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /dev/null
 }
 
+#######################################
+# pkg::install
+# Install packages via the OS package manager.
+# Globals:
+#   OS_TYPE
+# Arguments:
+#   1+ - package names
+# Returns:
+#   0 on success, 1 if unsupported OS
+#######################################
 pkg::install() {
   local -a pkgs=("$@")
   [[ ${#pkgs[@]} -gt 0 ]] || return 0
@@ -49,6 +73,15 @@ pkg::install() {
   esac
 }
 
+#######################################
+# pkg::ensure_group
+# Install a labeled group of packages with user feedback.
+# Arguments:
+#   1 - label for the group
+#   2+ - package names
+# Outputs:
+#   Step and success/warn messages
+#######################################
 pkg::ensure_group() {
   local label="$1"
   shift
@@ -62,6 +95,18 @@ pkg::ensure_group() {
   fi
 }
 
+#######################################
+# pkg::ensure_apt_repo
+# Add a third-party APT repository with GPG key.
+# Arguments:
+#   1 - repository name
+#   2 - GPG key URL
+#   3 - repository line
+# Outputs:
+#   None
+# Returns:
+#   0 always
+#######################################
 pkg::ensure_apt_repo() {
   local name="$1" key_url="$2" repo_line="$3"
   core::sudo mkdir -p /etc/apt/keyrings

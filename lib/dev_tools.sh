@@ -2,6 +2,12 @@
 # Developer tooling installers (fzf, glow, gh, etc.).
 # shellcheck shell=bash
 
+#######################################
+# dev_tools::ensure_local_bin_path
+# Add ~/.local/bin to PATH in .zshrc if not present.
+# Outputs:
+#   Note messages
+#######################################
 dev_tools::ensure_local_bin_path() {
   # shellcheck disable=SC2016
   if fs::append_once "${HOME}/.zshrc" 'export PATH="$HOME/.local/bin:$PATH"'; then
@@ -11,6 +17,14 @@ dev_tools::ensure_local_bin_path() {
   fi
 }
 
+#######################################
+# dev_tools::ensure_debian_fd_symlink
+# Create symlink from fdfind to fd on Debian.
+# Outputs:
+#   Step/success/warn messages
+# Returns:
+#   0 always
+#######################################
 dev_tools::ensure_debian_fd_symlink() {
   if core::have fd || ! core::have fdfind; then
     return 0
@@ -28,6 +42,14 @@ dev_tools::ensure_debian_fd_symlink() {
   fi
 }
 
+#######################################
+# dev_tools::ensure_debian_bat_symlink
+# Create symlink from batcat to bat on Debian.
+# Outputs:
+#   Step/success/warn messages
+# Returns:
+#   0 always
+#######################################
 dev_tools::ensure_debian_bat_symlink() {
   if core::have bat || ! core::have batcat; then
     return 0
@@ -46,6 +68,14 @@ dev_tools::ensure_debian_bat_symlink() {
   fi
 }
 
+#######################################
+# dev_tools::ensure_fzf_stack
+# Install fzf, fd, bat, tree and handle Debian symlinks.
+# Globals:
+#   OS_TYPE
+# Outputs:
+#   Delegated package install and symlink messages
+#######################################
 dev_tools::ensure_fzf_stack() {
   case "${OS_TYPE}" in
     debian)
@@ -68,45 +98,93 @@ dev_tools::ensure_fzf_stack() {
   esac
 }
 
-dev_tools::install_glow_fallback() {
-  local glow_version="1.5.1"
-  local arch glow_arch="" tmpd tar url
+#######################################
+# dev_tools::get_glow_arch
+# Detect glow architecture name for download.
+# Outputs: arch string (amd64/arm64) or empty on unsupported
+#######################################
+dev_tools::get_glow_arch() {
+  local arch
   arch="$(uname -m)"
   case "${arch}" in
-    x86_64 | amd64) glow_arch=amd64 ;;
-    aarch64 | arm64) glow_arch=arm64 ;;
-    *)
-      warn "Unsupported arch for glow fallback (${arch})"
-      return 1
-      ;;
+    x86_64 | amd64) echo "amd64" ;;
+    aarch64 | arm64) echo "arm64" ;;
+    *) return 1 ;;
   esac
-  tmpd="$(mktemp -d)" || true
-  if [[ -z "${tmpd}" ]]; then
-    warn "Failed to create temp dir for glow fallback"
+}
+
+#######################################
+# dev_tools::install_binary
+# Install a binary to system or user bin.
+# Arguments:
+#   1 - binary path
+#   2 - binary name
+#######################################
+dev_tools::install_binary() {
+  local src="$1" name="$2"
+  if [[ -w /usr/local/bin ]]; then
+    core::run install -m 0755 "${src}" "/usr/local/bin/${name}"
+  else
+    fs::ensure_dir "${HOME}/.local/bin"
+    core::run install -m 0755 "${src}" "${HOME}/.local/bin/${name}"
+    dev_tools::ensure_local_bin_path
+  fi
+}
+
+#######################################
+# dev_tools::install_glow_fallback
+# Download and install glow binary directly from GitHub releases.
+# Outputs:
+#   Step/success/warn messages
+# Returns:
+#   0 on success, 1 on failure
+#######################################
+dev_tools::install_glow_fallback() {
+  local glow_version="1.5.1" glow_arch tmpd tar url
+
+  if ! glow_arch="$(dev_tools::get_glow_arch)"; then
+    warn "Unsupported arch for glow fallback ($(uname -m))"
     return 1
   fi
+
+  tmpd="$(mktemp -d)" || {
+    warn "Failed to create temp dir for glow fallback"
+    return 1
+  }
+
   tar="glow_${glow_version}_linux_${glow_arch}.tar.gz"
   url="https://github.com/charmbracelet/glow/releases/download/v${glow_version}/${tar}"
   step "Downloading glow fallback ${glow_version}"
-  if core::run curl -fsSL "${url}" -o "${tmpd}/${tar}" && core::run tar -xzf "${tmpd}/${tar}" -C "${tmpd}" glow; then
-    if [[ -w /usr/local/bin ]]; then
-      core::run install -m 0755 "${tmpd}/glow" /usr/local/bin/glow || true
-    else
-      fs::ensure_dir "${HOME}/.local/bin"
-      core::run install -m 0755 "${tmpd}/glow" "${HOME}/.local/bin/glow" || true
-      dev_tools::ensure_local_bin_path
-    fi
-    if core::have glow; then
-      success "glow (fallback)"
-      return 0
-    fi
-    warn "glow fallback present but not in PATH"
+
+  if ! core::run curl -fsSL "${url}" -o "${tmpd}/${tar}"; then
+    warn "glow fallback download failed"
     return 1
   fi
-  warn "glow fallback download failed"
+
+  if ! core::run tar -xzf "${tmpd}/${tar}" -C "${tmpd}" glow; then
+    warn "glow fallback extraction failed"
+    return 1
+  fi
+
+  dev_tools::install_binary "${tmpd}/glow" glow
+
+  if core::have glow; then
+    success "glow (fallback)"
+    return 0
+  fi
+
+  warn "glow fallback present but not in PATH"
   return 1
 }
 
+#######################################
+# dev_tools::ensure_glow
+# Install glow markdown renderer via package manager or fallback.
+# Globals:
+#   OS_TYPE
+# Outputs:
+#   Step/success/warn messages
+#######################################
 dev_tools::ensure_glow() {
   if core::have glow; then
     return 0
@@ -135,6 +213,12 @@ dev_tools::ensure_glow() {
   esac
 }
 
+#######################################
+# dev_tools::ensure_hub_alias
+# Add hub alias for gh in .zshrc if gh present but hub missing.
+# Returns:
+#   0 always
+#######################################
 dev_tools::ensure_hub_alias() {
   if core::have hub || ! core::have gh; then
     return 0
@@ -142,20 +226,35 @@ dev_tools::ensure_hub_alias() {
   fs::append_once "${HOME}/.zshrc" "alias hub='gh'"
 }
 
+#######################################
+# dev_tools::setup_gh_debian_repo
+# Configure GitHub CLI repository for Debian.
+#######################################
+dev_tools::setup_gh_debian_repo() {
+  pkg::ensure_apt_repo "github-cli" \
+    "https://cli.github.com/packages/githubcli-archive-keyring.gpg" \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main"
+}
+
+#######################################
+# dev_tools::ensure_gh_cli
+# Install GitHub CLI via package manager.
+# Globals:
+#   OS_TYPE
+# Outputs:
+#   Headline and step/success/warn messages
+#######################################
 dev_tools::ensure_gh_cli() {
   headline "GitHub CLI"
   if core::have gh; then
     note "gh already present ($(gh --version | head -n1))"
     return 0
   fi
+
   case "${OS_TYPE}" in
     debian)
-      pkg::ensure_apt_repo "github-cli" \
-        "https://cli.github.com/packages/githubcli-archive-keyring.gpg" \
-        "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main"
-      if pkg::install gh; then
-        success "gh installed"
-      fi
+      dev_tools::setup_gh_debian_repo
+      pkg::install gh && success "gh installed"
       ;;
     redhat)
       pkg::install gh || warn "Install gh manually: https://cli.github.com"
@@ -170,6 +269,7 @@ dev_tools::ensure_gh_cli() {
       warn "Install gh manually"
       ;;
   esac
+
   if core::have gh; then
     success "gh ready"
   else
@@ -177,6 +277,12 @@ dev_tools::ensure_gh_cli() {
   fi
 }
 
+#######################################
+# dev_tools::setup
+# Main orchestrator for developer utilities.
+# Outputs:
+#   Headline and delegated messages
+#######################################
 dev_tools::setup() {
   headline "Developer Utilities"
   dev_tools::ensure_gh_cli
