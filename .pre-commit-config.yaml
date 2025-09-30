@@ -1,4 +1,8 @@
+# Dotfiles pre-commit configuration
+# Matches GitHub Actions workflow for consistency
+
 repos:
+  # Basic file hygiene
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -6,35 +10,27 @@ repos:
       - id: end-of-file-fixer
       - id: check-executables-have-shebangs
       - id: check-merge-conflict
-  # Using dedicated shfmt pre-commit wrapper repo (mvdan/sh clone was missing manifest in this environment)
+
+  # Shell formatting (matches GitHub Actions shfmt flags: -i 2 -ci -sr)
   - repo: https://github.com/scop/pre-commit-shfmt
-    # Tag pattern v<shfmt-version>-<packaging-rev>. Adjust if updating shfmt.
     rev: v3.12.0-2
     hooks:
       - id: shfmt
-        args: ['-i', '2', '-ci', '-sr']
+        args: ['-i', '2', '-ci', '-sr', '-d']
+
+  # Shell linting (matches GitHub Actions)
   - repo: https://github.com/koalaman/shellcheck-precommit
     rev: v0.11.0
     hooks:
       - id: shellcheck
-        additional_dependencies: []
-        files: |-
-          ^(install\.sh|.*\.sh|\.zshrc|\.zsh/.*\.zsh)$
-        exclude: |-
-          (^|/)vendor/
+        files: '\.(sh|bash)$'
 
-# Local hooks (optional) for a quick aggregate shell lint run
+  # Style audit (custom heuristics)
   - repo: local
     hooks:
-      - id: shell-lint-all
-        name: shell-lint-all
-        entry: bash scripts/lint-shell.sh
-        language: system
-        pass_filenames: false
-        stages: [manual]
-      - id: shell-audit-heuristics
-        name: shell-audit-heuristics
+      - id: shell-audit
+        name: Shell style audit
         entry: bash scripts/audit-shell-style.sh
         language: system
         pass_filenames: false
-        stages: [manual]
+        files: '\.sh$'

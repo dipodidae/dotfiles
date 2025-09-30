@@ -12,34 +12,70 @@ Zsh shell + modern tooling, bootstrapped in one go.
 
 ## Quick Start
 
-Copy-paste this and you’re basically done:
+Copy-paste this and you’re done:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh | bash
 ```
 
-That’s it. Rerun the installer any time — it just updates, never clobbers your local overrides.
+---
+
+## Development & Linting
+
+This repo follows **one canonical linting pipeline** (defined in `.github/workflows/shellcheck.yml`).
+
+### Local Development
+
+```bash
+# Run complete lint suite (matches CI)
+make lint              # or: ./scripts/lint-shell.sh
+
+# Auto-format all shell files
+./scripts/format-shell.sh
+
+# Check formatting only
+./scripts/format-shell.sh --check
+```
+
+### Pre-commit Hooks (Optional)
+
+```bash
+pre-commit install     # Auto-lint on commit
+pre-commit run --all-files
+```
+
+### What Gets Checked
+
+1. **shellcheck (bash)** - main shell files
+2. **shellcheck (zsh)** - advisory only
+3. **shfmt** - formatting (`-i 2 -ci -sr`)
+4. **audit** - Google Shell Style Guide heuristics
+
+Local = CI = consistent.
+
+Re-run the installer anytime — it updates safely and never overwrites your local overrides.
 
 ---
 
 ## What You Get
 
-* ⚡ **Fast Zsh**: Oh My Zsh + Pure prompt, sub-second load.
-* 🧩 Plugins: autosuggestions, syntax highlighting, `z`, you-should-use.
-* 🛠 Git helpers: rich alias set, PR workflow, diff-so-fancy.
-* 📦 Node ready: NVM (LTS), pnpm, `ni`/`nr` for universal scripts.
-* 🐍 Python bootstrap via pyenv (best effort).
-* 🔎 fzf everywhere (with fd / bat / tree when present).
-* 📖 In-terminal docs via `glow` (or `cat` fallback).
-* 🔒 Safe installer: backs up your old dotfiles automatically.
+* ⚡ **Fast Zsh**: Oh My Zsh + Pure prompt, sub-second load
+* 🧩 Plugins: autosuggestions, syntax highlighting, `z`, you-should-use
+* 🛠 Git helpers: aliases, PR workflow, diff-so-fancy
+* 📦 Node ready: NVM (LTS), pnpm, `ni`/`nr` for universal scripts
+* 🐍 Python via pyenv (best effort)
+* 🔎 fzf everywhere (with fd / bat / tree when present)
+* 📖 In-terminal docs with `glow` (falls back to `cat`)
+* 🔒 Safe installer: backs up your old dotfiles automatically
 
 ---
 
 ## Built-in Help
 
-Type `help` and you’ll either get:
+Type `help` in your shell:
 
-Renders in-terminal with `glow`, falls back to plain text.
+* Renders with `glow` if available
+* Falls back to plain text
 
 ---
 
@@ -61,15 +97,15 @@ development proj     # cd ~/development/proj
 dir newthing         # mkdir + cd
 
 # Clone
-cloned user/repo     # clone to ~/development + open VSCode
+cloned user/repo     # clone to ~/development + open in VSCode
 ```
 
 ---
 
 ## Customizing
 
-Your own tweaks live in `~/.zshrc.local` (never touched).
-Re-run installer whenever — it won’t overwrite local changes.
+Put your own tweaks in `~/.zshrc.local`.
+Re-run the installer whenever — your local changes stay untouched.
 
 ---
 

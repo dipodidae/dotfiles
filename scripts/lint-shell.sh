@@ -1,8 +1,97 @@
 #!/bin/bash
-# Aggregate shell lint helper.
-# Runs ShellCheck on bash/zsh related files and shfmt in diff-safe (check) mode.
-set -euo pipefail
-shopt -s nullglob globstar
+# Canonical shell linting pipeline - matches GitHub Actions exactly.
+# This is the ONE source of truth for all linting: local dev, pre-commit, CI.
+set -Eeuo pipefail
+
+# Script directory
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly REPO_ROOT="$(dirname "${SCRIPT_DIR}")"
+
+#######################################
+# Print error message to stderr.
+# Arguments:
+#   * - message text
+# Outputs:
+#   Writes to stderr
+#######################################
+err() { echo "[ERR] $*" >&2; }
+
+#######################################
+# Print info message to stdout.
+# Arguments:
+#   * - message text
+# Outputs:
+#   Writes to stdout
+#######################################
+log() { echo "[INF] $*"; }
+
+#######################################
+# Run shellcheck on bash shell scripts.
+# Matches GitHub Actions "Check shell scripts (bash)" step.
+# Globals:
+#   REPO_ROOT
+# Returns:
+#   0 on success, non-zero on lint failures.
+#######################################
+check_bash() {
+  log "==> Shellcheck (bash) ..."
+  shellcheck --color=auto --shell=bash \
+    "${REPO_ROOT}"/install.sh \
+    "${REPO_ROOT}"/lib/*.sh \
+    "${REPO_ROOT}"/scripts/*.sh
+}
+
+#######################################
+# Run shellcheck on zsh scripts (advisory).
+# Matches GitHub Actions "Check shell scripts (zsh)" step.
+# Globals:
+#   REPO_ROOT
+# Returns:
+#   Always 0 (advisory only).
+#######################################
+check_zsh() {
+  log "==> Shellcheck (zsh - advisory) ..."
+  if [[ -d "${REPO_ROOT}/.zsh" ]]; then
+    shellcheck --color=auto --shell=bash --severity=warning \
+      "${REPO_ROOT}"/.zsh/*.zsh 2>&1 || true
+  fi
+  if [[ -f "${REPO_ROOT}/.zshrc" ]]; then
+    shellcheck --color=auto --shell=bash --severity=warning \
+      "${REPO_ROOT}/.zshrc" 2>&1 || true
+  fi
+}
+
+#######################################
+# Check formatting with shfmt.
+# Matches GitHub Actions "Check formatting (shfmt)" step.
+# Globals:
+#   REPO_ROOT
+# Returns:
+#   0 if formatted, non-zero if changes needed.
+#######################################
+check_format() {
+  log "==> Check formatting (shfmt -i 2 -ci -sr) ..."
+  if ! shfmt -i 2 -ci -sr -d \
+    "${REPO_ROOT}"/install.sh \
+    "${REPO_ROOT}"/lib/*.sh \
+    "${REPO_ROOT}"/scripts/*.sh; then
+    err "Formatting issues detected. Run: shfmt -i 2 -ci -sr -w ."
+    return 1
+  fi
+}
+
+#######################################
+# Run style audit heuristics.
+# Matches GitHub Actions "Style audit" step.
+# Globals:
+#   SCRIPT_DIR
+# Returns:
+#   0 on success, non-zero on audit failures.
+#######################################
+check_audit() {
+  log "==> Style audit (Google Shell Style Guide heuristics) ..."
+  "${SCRIPT_DIR}/audit-shell-style.sh"
+}
 
 #######################################
 # Main function to run comprehensive shell linting
@@ -16,57 +105,21 @@ shopt -s nullglob globstar
 #   0 if all checks pass, 1 if issues found
 #######################################
 main() {
-  readonly ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-  cd "${ROOT_DIR}"
+  local exit_code=0
 
-  # Collect files
-  local -a SH_FILES
-  mapfile -t SH_FILES < <(git ls-files '*.sh') || true
-  if [[ -f .zshrc ]]; then
-    SH_FILES+=(".zshrc")
-  fi
-  while IFS= read -r -d '' f; do
-    SH_FILES+=("${f}")
-  done < <(find .zsh -type f -name '*.zsh' -print0 2> /dev/null || true)
+  # Run all checks (continue on failure to show all issues)
+  check_bash || exit_code=1
+  check_zsh # Advisory only, never fails
+  check_format || exit_code=1
+  check_audit || exit_code=1
 
-  if [[ ${#SH_FILES[@]} -eq 0 ]]; then
-    echo "No shell files detected"
-    return 0
-  fi
-
-  echo "== ShellCheck =="
-  local FAIL=0
-  local f
-  for f in "${SH_FILES[@]}"; do
-    if shellcheck "${f}"; then
-      :
-    else
-      echo "-- lint issues: ${f}" >&2
-      FAIL=1
-    fi
-  done
-
-  echo "== shfmt (style check only) =="
-  if command -v shfmt > /dev/null 2>&1; then
-    if ! shfmt -d -i 2 -ci -sr "${SH_FILES[@]}"; then
-      echo "Formatting differences found. Run: scripts/fix-shell.sh" >&2
-      FAIL=1
-    fi
+  if ((exit_code == 0)); then
+    log "✓ All lint checks passed."
   else
-    echo "shfmt not installed (skip). Install via: go install mvdan.cc/sh/v3/cmd/shfmt@latest" >&2
+    err "✗ Lint checks failed."
   fi
 
-  echo "== Heuristic audit (headers & main) =="
-  if ! bash "$(dirname "${BASH_SOURCE[0]}")/audit-shell-style.sh"; then
-    FAIL=1
-  fi
-
-  if [[ ${FAIL} -ne 0 ]]; then
-    echo "Shell lint failed." >&2
-    exit 1
-  fi
-
-  echo "All shell lint checks (including heuristic audit) passed."
+  return "${exit_code}"
 }
 
 main "$@"

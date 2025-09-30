@@ -214,19 +214,6 @@ dev_tools::ensure_glow() {
 }
 
 #######################################
-# dev_tools::ensure_hub_alias
-# Add hub alias for gh in .zshrc if gh present but hub missing.
-# Returns:
-#   0 always
-#######################################
-dev_tools::ensure_hub_alias() {
-  if core::have hub || ! core::have gh; then
-    return 0
-  fi
-  fs::append_once "${HOME}/.zshrc" "alias hub='gh'"
-}
-
-#######################################
 # dev_tools::setup_gh_debian_repo
 # Configure GitHub CLI repository for Debian.
 #######################################
@@ -288,5 +275,4 @@ dev_tools::setup() {
   dev_tools::ensure_gh_cli
   dev_tools::ensure_fzf_stack
   dev_tools::ensure_glow
-  dev_tools::ensure_hub_alias
 }
