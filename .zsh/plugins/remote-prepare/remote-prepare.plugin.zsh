@@ -51,7 +51,7 @@ _remote_prepare_plugin::log_error() {
 #   0 always.
 #######################################
 _remote_prepare_plugin::usage() {
-  cat <<'EOF'
+  cat << 'EOF'
 Usage: prepare-remote <user@host> [options] [-- <install args>]
 Options:
   -p, --port <port>       SSH port (default: 22)
@@ -141,16 +141,16 @@ _remote_prepare_plugin::remote_exec() {
 _remote_prepare_plugin::detect_repo() {
   emulate -L zsh
   setopt local_options pipefail
-  if ! command -v git >/dev/null 2>&1; then
+  if ! command -v git > /dev/null 2>&1; then
     printf ''
     return 0
   fi
-  if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+  if ! git rev-parse --show-toplevel > /dev/null 2>&1; then
     printf ''
     return 0
   fi
   local origin
-  origin="$(git config --get remote.origin.url 2>/dev/null)"
+  origin="$(git config --get remote.origin.url 2> /dev/null)"
   printf '%s' "${origin}"
 }
 
@@ -162,16 +162,16 @@ _remote_prepare_plugin::detect_repo() {
 _remote_prepare_plugin::detect_branch() {
   emulate -L zsh
   setopt local_options pipefail
-  if ! command -v git >/dev/null 2>&1; then
+  if ! command -v git > /dev/null 2>&1; then
     printf ''
     return 0
   fi
-  if ! git rev-parse --show-toplevel >/dev/null 2>&1; then
+  if ! git rev-parse --show-toplevel > /dev/null 2>&1; then
     printf ''
     return 0
   fi
   local branch
-  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  branch="$(git rev-parse --abbrev-ref HEAD 2> /dev/null)"
   if [[ "${branch}" == "HEAD" ]]; then
     printf ''
     return 0
@@ -220,71 +220,71 @@ prepare_remote() {
 
   while (($#)); do
     case "$1" in
-    -p | --port)
-      if [[ -n "${2:-}" ]]; then
-        port="$2"
-        shift 2
+      -p | --port)
+        if [[ -n "${2:-}" ]]; then
+          port="$2"
+          shift 2
+          continue
+        fi
+        _remote_prepare_plugin::log_error "Missing value for $1"
+        return 2
+        ;;
+      --repo)
+        if [[ -n "${2:-}" ]]; then
+          repo="$2"
+          repo_override=1
+          shift 2
+          continue
+        fi
+        _remote_prepare_plugin::log_error "Missing value for --repo"
+        return 2
+        ;;
+      --branch)
+        if [[ -n "${2:-}" ]]; then
+          branch="$2"
+          branch_override=1
+          shift 2
+          continue
+        fi
+        _remote_prepare_plugin::log_error "Missing value for --branch"
+        return 2
+        ;;
+      --target | --path)
+        if [[ -n "${2:-}" ]]; then
+          target="$2"
+          shift 2
+          continue
+        fi
+        _remote_prepare_plugin::log_error "Missing value for $1"
+        return 2
+        ;;
+      --logs)
+        show_logs=1
+        shift
         continue
-      fi
-      _remote_prepare_plugin::log_error "Missing value for $1"
-      return 2
-      ;;
-    --repo)
-      if [[ -n "${2:-}" ]]; then
-        repo="$2"
-        repo_override=1
-        shift 2
-        continue
-      fi
-      _remote_prepare_plugin::log_error "Missing value for --repo"
-      return 2
-      ;;
-    --branch)
-      if [[ -n "${2:-}" ]]; then
-        branch="$2"
-        branch_override=1
-        shift 2
-        continue
-      fi
-      _remote_prepare_plugin::log_error "Missing value for --branch"
-      return 2
-      ;;
-    --target | --path)
-      if [[ -n "${2:-}" ]]; then
-        target="$2"
-        shift 2
-        continue
-      fi
-      _remote_prepare_plugin::log_error "Missing value for $1"
-      return 2
-      ;;
-    --logs)
-      show_logs=1
-      shift
-      continue
-      ;;
-    -h | --help)
-      _remote_prepare_plugin::usage
-      return 0
-      ;;
-    --)
-      shift
-      install_args=("$@")
-      break
-      ;;
-    -*)
-      _remote_prepare_plugin::log_error "Unknown option: $1"
-      _remote_prepare_plugin::usage >&2
-      return 2
-      ;;
-    *)
-      if [[ -z "${remote}" ]]; then
-        remote="$1"
-      else
-        install_args+=("$1")
-      fi
-      shift
-      ;;
+        ;;
+      -h | --help)
+        _remote_prepare_plugin::usage
+        return 0
+        ;;
+      --)
+        shift
+        install_args=("$@")
+        break
+        ;;
+      -*)
+        _remote_prepare_plugin::log_error "Unknown option: $1"
+        _remote_prepare_plugin::usage >&2
+        return 2
+        ;;
+      *)
+        if [[ -z "${remote}" ]]; then
+          remote="$1"
+        else
+          install_args+=("$1")
+        fi
+        shift
+        ;;
     esac
   done
 
@@ -305,7 +305,7 @@ prepare_remote() {
     [[ -n "${detected_branch}" ]] && branch="${detected_branch}"
   fi
 
-  if ! command -v ssh >/dev/null 2>&1; then
+  if ! command -v ssh > /dev/null 2>&1; then
     _remote_prepare_plugin::log_error "ssh command not found on local machine"
     return 127
   fi
@@ -324,7 +324,7 @@ prepare_remote() {
 
   local remote_script
   remote_script=$(
-    cat <<'EOF'
+    cat << 'EOF'
 set -eu
 repo="$1"
 branch="$2"
@@ -374,7 +374,7 @@ EOF
   )
 
   _remote_prepare_plugin::log_info "Running remote installer..."
-  if ! _remote_prepare_plugin::remote_exec "${remote}" "${port}" sh -s -- "${repo}" "${branch}" "${target}" "${install_args[@]}" <<<"${remote_script}"; then
+  if ! _remote_prepare_plugin::remote_exec "${remote}" "${port}" sh -s -- "${repo}" "${branch}" "${target}" "${install_args[@]}" <<< "${remote_script}"; then
     _remote_prepare_plugin::log_error "Remote install failed"
     show_logs=1
     _remote_prepare_plugin::show_remote_logs "${remote}" "${port}"
