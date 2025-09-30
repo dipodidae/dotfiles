@@ -9,24 +9,56 @@
 # Many "issues" reported by shellcheck are normal zsh patterns and don't need fixing.
 
 # ────────────────────────────────────────────────────────────────────────────────
+# HELPERS
+# ────────────────────────────────────────────────────────────────────────────────
+
+function _zshrc_source_if_exists() {
+  local target="${1}"
+  [[ -f "${target}" ]] && source "${target}"
+}
+
+function _zshrc_prepend_path() {
+  local candidate="${1}"
+  [[ -n "${candidate}" && -d "${candidate}" ]] || return 0
+  path=("${candidate}" "${(@)path}")
+}
+
+function _zshrc_unalias_conflicts() {
+  local alias_name
+  local -a aliases_to_clear=(
+    glp gd gdc pr development repros forks projects dir clone cloned cloner
+    clonef clonep coded serve cluster migrate nuke
+  )
+  for alias_name in "${aliases_to_clear[@]}"; do
+    unalias "${alias_name}" 2>/dev/null || true
+  done
+}
+
+function _zshrc_clean_broken_docker_completions() {
+  local completion_dir="/usr/share/zsh/vendor-completions"
+  [[ -d "${completion_dir}" ]] || return 0
+  command -v sudo >/dev/null 2>&1 || return 0
+
+  local comp_file
+  for comp_file in "${completion_dir}"/_docker*; do
+    [[ -L "${comp_file}" && ! -e "${comp_file}" ]] || continue
+    sudo rm -f "${comp_file}" 2> /dev/null || true
+  done
+}
+
+typeset -gU path fpath
+
+# ────────────────────────────────────────────────────────────────────────────────
 # SHELL CONFIGURATION
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Oh My Zsh setup
 export ZSH="${HOME}/.oh-my-zsh"
 
-# Add custom plugin directory to fpath for plugin discovery
-fpath+="${HOME}/.zsh/plugins"
+fpath+=("${HOME}/.zsh/plugins")
+fpath+=("${HOME}/.zsh/pure")
 
-# Unalias potentially conflicting names (pre-plugin load) so that if any were
-# previously defined in login shell fragments they don't interfere.
-for __sc_fn in glp gd gdc pr development repros forks projects dir clone cloned cloner clonef clonep coded serve cluster migrate nuke; do
-  unalias "${__sc_fn}" 2> /dev/null || true
-done
-unset __sc_fn
+_zshrc_unalias_conflicts
 
-# Zsh plugins configuration
-# Note: Custom plugins in ~/.zsh/plugins/ are automatically discovered
 plugins=(
   git
   zsh-autosuggestions
@@ -36,47 +68,33 @@ plugins=(
   spend-cloud
 )
 
-# Load Oh My Zsh if present (avoid hard failure if not installed yet)
-# shellcheck disable=SC1091
 if [[ -f "${ZSH}/oh-my-zsh.sh" ]]; then
   source "${ZSH}/oh-my-zsh.sh"
 else
-  echo "[zshrc] Warning: oh-my-zsh not found at ${ZSH}/oh-my-zsh.sh (skipping)" >&2
+  printf '[zshrc] Warning: oh-my-zsh not found at %s/oh-my-zsh.sh (skipping)\n' "${ZSH}" >&2
 fi
 
-for __sc_fn in glp gd gdc pr development repros forks projects dir clone cloned cloner clonef clonep coded serve cluster migrate nuke; do
-  unalias "${__sc_fn}" 2> /dev/null || true
-done
-unset __sc_fn
+_zshrc_unalias_conflicts
 
 # ────────────────────────────────────────────────────────────────────────────────
 # PURE PROMPT CONFIGURATION
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Ensure Pure is available (manual install path)
-fpath+=("${HOME}/.zsh/pure")
-
-# Core Pure options
 PURE_CMD_MAX_EXEC_TIME=3
 PURE_GIT_PULL=0
 PURE_GIT_UNTRACKED_DIRTY=1
 
-# Feature toggles via zstyle
 zstyle :prompt:pure:environment:nix-shell show no
-
-# Color tweaks
 zstyle :prompt:pure:path color 250
 zstyle :prompt:pure:git:dirty color 204
 zstyle :prompt:pure:git:branch color 244
 zstyle :prompt:pure:prompt:success color green
 zstyle :prompt:pure:prompt:error color red
 
-# Initialize Pure
-autoload -U promptinit
+autoload -Uz promptinit
 promptinit
 prompt pure
 
-# Convenience: jump to this section quickly
 alias edit-pure='${EDITOR:-vi} +/PURE\ PROMPT\ CONFIGURATION ~/.zshrc'
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -85,15 +103,49 @@ alias edit-pure='${EDITOR:-vi} +/PURE\ PROMPT\ CONFIGURATION ~/.zshrc'
 
 # Node Version Manager (NVM)
 export NVM_DIR="${HOME}/.nvm"
-# shellcheck disable=SC1091
-[ -s "${NVM_DIR}/nvm.sh" ] && \. "${NVM_DIR}/nvm.sh"
-# shellcheck disable=SC1091
-[ -s "${NVM_DIR}/bash_completion" ] && \. "${NVM_DIR}/bash_completion"
+_zshrc_source_if_exists "${NVM_DIR}/nvm.sh"
+_zshrc_source_if_exists "${NVM_DIR}/bash_completion"
+
+# Homebrew (Linux)
+if [[ -x /home/linuxbrew/.linuxbrew/bin/brew ]]; then
+  eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+# Google Cloud SDK
+_zshrc_source_if_exists '/home/tom/google-cloud-sdk/path.zsh.inc'
+_zshrc_source_if_exists '/home/tom/google-cloud-sdk/completion.zsh.inc'
+_zshrc_prepend_path "${HOME}/google-cloud-sdk/bin"
+
+# PNPM package manager
+export PNPM_HOME="${HOME}/.local/share/pnpm"
+_zshrc_prepend_path "${PNPM_HOME}"
+alias pn=pnpm
+
+# Python environment management (pyenv)
+export PYENV_ROOT="${HOME}/.pyenv"
+_zshrc_prepend_path "${PYENV_ROOT}/bin"
+
+if command -v pyenv >/dev/null 2>&1; then
+  eval "$(pyenv init --path)"
+  eval "$(pyenv init -)"
+  if command -v pyenv-virtualenv >/dev/null 2>&1 || pyenv commands | grep -q virtualenv; then
+    eval "$(pyenv virtualenv-init -)"
+  fi
+fi
+
+# ASDF version manager (optional)
+_zshrc_source_if_exists "${HOME}/.asdf/asdf.sh"
+
+# Additional PATH entries
+_zshrc_prepend_path "${HOME}/.composer/vendor/bin"
+if command -v yarn >/dev/null 2>&1; then
+  _zshrc_prepend_path "$(yarn global bin)"
+fi
+_zshrc_prepend_path "${HOME}/.local/bin"
 
 # ────────────────────────────────────────────────────────────────────────────────
-# NODE.JS & PACKAGE MANAGEMENT
+# NODE.JS WORKFLOW ALIASES
 # ────────────────────────────────────────────────────────────────────────────────
-# https://github.com/antfu/ni
 
 alias nio="ni --prefer-offline"
 alias s="nr start"
@@ -111,10 +163,9 @@ alias release="nr release"
 alias re="nr release"
 
 # ────────────────────────────────────────────────────────────────────────────────
-# GIT CONFIGURATION & ALIASES
+# GIT ALIASES
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Go to project root
 alias grt='cd "$(git rev-parse --show-toplevel)"'
 
 alias gs='git status'
@@ -161,15 +212,11 @@ alias gsha='git rev-parse HEAD | pbcopy'
 
 alias ghci='gh run list -L 1'
 
-#######################################
-# Display git log with specified number of commits.
-# Arguments:
-#   Number of commits to show (default: 20)
-# Outputs:
-#   Git log to stdout
-# Returns:
-#   0 on success, 2 on invalid argument
-#######################################
+# ────────────────────────────────────────────────────────────────────────────────
+# GIT FUNCTIONS
+# ────────────────────────────────────────────────────────────────────────────────
+
+# Display git log with specified number of commits (default: 20).
 glp() {
   local c="${1:-20}"
   [[ "${c}" =~ ^[0-9]+$ ]] || {
@@ -179,13 +226,7 @@ glp() {
   git --no-pager log -"${c}"
 }
 
-#######################################
-# Show git diff with fancy formatting.
-# Arguments:
-#   Optional file path to diff
-# Outputs:
-#   Formatted git diff to stdout
-#######################################
+# Show git diff with fancy formatting (optionally for specific file).
 gd() {
   if [[ -z "${1:-}" ]]; then
     git diff --color | diff-so-fancy
@@ -194,13 +235,7 @@ gd() {
   fi
 }
 
-#######################################
-# Show git diff --cached with fancy formatting.
-# Arguments:
-#   Optional file path to diff
-# Outputs:
-#   Formatted git diff --cached to stdout
-#######################################
+# Show git diff --cached with fancy formatting (optionally for specific file).
 gdc() {
   if [[ -z "${1:-}" ]]; then
     git diff --color --cached | diff-so-fancy
@@ -209,15 +244,7 @@ gdc() {
   fi
 }
 
-#######################################
-# PR helper: list PRs or checkout PR by number.
-# Arguments:
-#   'ls' to list PRs, or PR number to checkout
-# Outputs:
-#   PR list or checkout status to stdout
-# Returns:
-#   0 on success, 2 on invalid usage
-#######################################
+# PR helper: list PRs with 'pr ls' or checkout PR by number 'pr 123'.
 pr() {
   if [[ -z "${1:-}" ]]; then
     echo 'usage: pr <ls|num>' >&2
@@ -230,15 +257,11 @@ pr() {
   fi
 }
 
-# Directory helpers
+# ────────────────────────────────────────────────────────────────────────────────
+# DIRECTORY NAVIGATION
+# ────────────────────────────────────────────────────────────────────────────────
 
-#######################################
-# Navigate to development directory.
-# Arguments:
-#   Directory name under ~/development
-# Returns:
-#   0 on success, 1 if cd fails, 2 on invalid usage
-#######################################
+# Navigate to subdirectory in ~/development
 development() {
   [[ -n "${1:-}" ]] || {
     echo 'usage: development <dir>' >&2
@@ -247,13 +270,7 @@ development() {
   cd "${HOME}/development/${1}" || return 1
 }
 
-#######################################
-# Navigate to repros directory.
-# Arguments:
-#   Directory name under ~/repros
-# Returns:
-#   0 on success, 1 if cd fails, 2 on invalid usage
-#######################################
+# Navigate to subdirectory in ~/repros
 repros() {
   [[ -n "${1:-}" ]] || {
     echo 'usage: repros <dir>' >&2
@@ -262,13 +279,7 @@ repros() {
   cd "${HOME}/repros/${1}" || return 1
 }
 
-#######################################
-# Navigate to forks directory.
-# Arguments:
-#   Directory name under ~/forks
-# Returns:
-#   0 on success, 1 if cd fails, 2 on invalid usage
-#######################################
+# Navigate to subdirectory in ~/forks
 forks() {
   [[ -n "${1:-}" ]] || {
     echo 'usage: forks <dir>' >&2
@@ -277,13 +288,7 @@ forks() {
   cd "${HOME}/forks/${1}" || return 1
 }
 
-#######################################
-# Navigate to projects directory.
-# Arguments:
-#   Directory name under ~/projects
-# Returns:
-#   0 on success, 1 if cd fails, 2 on invalid usage
-#######################################
+# Navigate to subdirectory in ~/projects
 projects() {
   [[ -n "${1:-}" ]] || {
     echo 'usage: projects <dir>' >&2
@@ -292,13 +297,7 @@ projects() {
   cd "${HOME}/projects/${1}" || return 1
 }
 
-#######################################
-# Create directory and navigate to it.
-# Arguments:
-#   Directory name to create
-# Returns:
-#   0 on success, 1 if mkdir or cd fails, 2 on invalid usage
-#######################################
+# Create directory and cd into it
 dir() {
   [[ -n "${1:-}" ]] || {
     echo 'usage: dir <new-dir>' >&2
@@ -307,16 +306,7 @@ dir() {
   mkdir -p -- "${1}" && cd "${1}" || return 1
 }
 
-# Clone helpers
-
-#######################################
-# Clone a repository and navigate to it.
-# Arguments:
-#   Repository to clone
-#   Optional directory name
-# Returns:
-#   0 on success, 1 if clone or cd fails, 2 on invalid usage
-#######################################
+# Clone repository with gh and cd into it
 clone() {
   [[ -n "${1:-}" ]] || {
     echo 'usage: clone <repo> [dir]' >&2
@@ -329,56 +319,32 @@ clone() {
   fi
 }
 
-#######################################
-# Clone to development directory and open in VS Code.
-# Arguments:
-#   Repository and optional directory arguments
-#######################################
+# Clone to ~/development, open in VS Code, return to previous directory
 cloned() {
   development && clone "$@" && code . && cd ~2
 }
 
-#######################################
-# Clone to repros directory and open in VS Code.
-# Arguments:
-#   Repository and optional directory arguments
-#######################################
+# Clone to ~/repros, open in VS Code, return to previous directory
 cloner() {
   repros && clone "$@" && code . && cd ~2
 }
 
-#######################################
-# Clone to forks directory and open in VS Code.
-# Arguments:
-#   Repository and optional directory arguments
-#######################################
+# Clone to ~/forks, open in VS Code, return to previous directory
 clonef() {
   forks && clone "$@" && code . && cd ~2
 }
 
-#######################################
-# Clone to projects directory and open in VS Code.
-# Arguments:
-#   Repository and optional directory arguments
-#######################################
+# Clone to ~/projects, open in VS Code, return to previous directory
 clonep() {
   projects && clone "$@" && code . && cd ~2
 }
 
-#######################################
-# Open VS Code in development directory.
-# Arguments:
-#   Directory or file arguments for VS Code
-#######################################
+# Open VS Code in development directory
 coded() {
   development && code "$@" && cd -
 }
 
-#######################################
-# Start live-server for local development.
-# Arguments:
-#   Optional directory to serve (default: dist)
-#######################################
+# Start live-server for local development (default: dist/)
 serve() {
   if [[ -z "${1:-}" ]]; then
     live-server dist
@@ -386,96 +352,23 @@ serve() {
     live-server "${1}"
   fi
 }
-# ────────────────────────────────────────────────────────────────────────────────
-# SYSTEM ENVIRONMENT SETUP
-# ────────────────────────────────────────────────────────────────────────────────
-
-# Homebrew (Linux)
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-
-# Google Cloud SDK
-if [[ -f '/home/tom/google-cloud-sdk/path.zsh.inc' ]]; then
-  . '/home/tom/google-cloud-sdk/path.zsh.inc'
-fi
-if [[ -f '/home/tom/google-cloud-sdk/completion.zsh.inc' ]]; then
-  . '/home/tom/google-cloud-sdk/completion.zsh.inc'
-fi
-
-export PATH="${PATH}:${HOME}/google-cloud-sdk/bin"
-
-# PNPM package manager
-export PNPM_HOME="${HOME}/.local/share/pnpm"
-case ":${PATH}:" in
-  *":${PNPM_HOME}:"*) ;;
-  *) export PATH="${PNPM_HOME}:${PATH}" ;;
-esac
-
-# PNPM alias for shorter commands
-alias pn=pnpm
-
-# Python environment management (pyenv)
-export PYENV_ROOT="${HOME}/.pyenv"
-export PATH="${PYENV_ROOT}/bin:${PATH}"
-eval "$(pyenv init --path)"
-eval "$(pyenv init -)"
-# Only initialize pyenv virtualenv if available (fixes WSL error)
-if command -v pyenv-virtualenv > /dev/null 2>&1 || pyenv commands | grep -q virtualenv; then
-  eval "$(pyenv virtualenv-init -)"
-fi
-
-# ASDF version manager (optional)
-if [[ -f "${HOME}/.asdf/asdf.sh" ]]; then
-  # shellcheck disable=SC1091
-  . "${HOME}/.asdf/asdf.sh"
-fi
 
 # ────────────────────────────────────────────────────────────────────────────────
 # HELP SYSTEM
 # ────────────────────────────────────────────────────────────────────────────────
 
-#######################################
-# Display help documentation using glow or cat fallback.
-# Outputs:
-#   Help documentation to stdout
-# Returns:
-#   0 on success, 1 if help file not found
-#######################################
 help() {
-  # Determine which help file to show based on SpendCloud enablement.
-  # Priority:
-  #   1. If SpendCloud module loaded (marker var) or ENABLE_SPEND_CLOUD set AND full help exists -> full
-  #   2. Else minimal help (if exists)
-  #   3. Else fallback to full path missing notice
-  local full_help minimal_help chosen
-  full_help="${HOME}/.zshrc.help.md"
-  minimal_help="${HOME}/.zshrc.help.minimal.md"
+  local help_file="${HOME}/.zshrc.help.md"
 
-  if [[ -n "${_SPEND_CLOUD_MODULE_LOADED:-}" || -n "${ENABLE_SPEND_CLOUD:-}" ]]; then
-    if [[ -f "${full_help}" ]]; then
-      chosen="${full_help}"
-    elif [[ -f "${minimal_help}" ]]; then
-      chosen="${minimal_help}"
-    fi
-  else
-    if [[ -f "${minimal_help}" ]]; then
-      chosen="${minimal_help}"
-    elif [[ -f "${full_help}" ]]; then
-      chosen="${full_help}"
-    fi
-  fi
-
-  if [[ -z "${chosen}" ]]; then
-    echo "Help files missing. Expected one of: ${full_help} or ${minimal_help}"
-    echo "Re-run installer or pull latest dotfiles." >&2
+  [[ -f "${help_file}" ]] || {
+    echo "Help file missing: ${help_file}" >&2
     return 1
-  fi
+  }
 
-  if command -v glow > /dev/null 2>&1; then
-    # shellcheck disable=SC2002
-    cat "${chosen}" | glow -
+  if command -v glow >/dev/null 2>&1; then
+    glow "${help_file}"
   else
-    echo "(glow not installed; using cat) Showing: ${chosen}" >&2
-    cat "${chosen}"
+    cat "${help_file}"
   fi
 }
 
@@ -483,34 +376,10 @@ help() {
 # WSL & COMPLETION FIXES
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Fix docker completion errors in WSL/environments where docker completions are missing
-# This prevents the "compinit:527: no such file or directory: /usr/share/zsh/vendor-completions/_docker" error
-if [[ -d "/usr/share/zsh/vendor-completions" ]]; then
-  # Remove any broken docker completion symlinks/files that cause errors
-  for comp_file in /usr/share/zsh/vendor-completions/_docker*; do
-    if [[ -L "${comp_file}" && ! -e "${comp_file}" ]]; then
-      # It's a broken symlink, try to remove it (if we have permission)
-      sudo rm -f "${comp_file}" 2> /dev/null || true
-    fi
-  done
-fi
+_zshrc_clean_broken_docker_completions
 
-# Alternative: Skip missing completions gracefully
-# This ensures compinit doesn't fail on missing completion files
 setopt COMPLETE_IN_WORD
 setopt ALWAYS_TO_END
 zstyle ':completion:*' completer _complete _match _approximate
 zstyle ':completion:*:match:*' original only
 zstyle ':completion:*:approximate:*' max-errors 1 numeric
-
-export PATH="${PATH}:${HOME}/.composer/vendor/bin"
-if command -v yarn > /dev/null 2>&1; then
-  export PATH="${PATH}:$(yarn global bin)"
-fi
-export PATH="${PATH}:${HOME}/.local/bin"
-
-# ASDF version manager (optional)
-if [[ -f "${HOME}/.asdf/asdf.sh" ]]; then
-  # shellcheck disable=SC1091 # optional ASDF environment script (dynamic, may not exist)
-  . "${HOME}/.asdf/asdf.sh"
-fi
