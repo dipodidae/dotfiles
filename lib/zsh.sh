@@ -214,6 +214,74 @@ zsh::install_ssh_transfer_plugin() {
 }
 
 #######################################
+# zsh::install_remote_prepare_plugin
+# Install custom remote-prepare plugin from local dotfiles or remote repo.
+# Arguments:
+#   1 - base plugins directory path
+#   2 - force refresh flag (optional; default 0)
+# Globals:
+#   SCRIPT_DIR
+#   REPO_URL (for remote installs)
+# Outputs:
+#   Step/success/warn/note messages
+# Returns:
+#   0 on success or skip, 1 on failure
+#######################################
+zsh::install_remote_prepare_plugin() {
+  local base="$1"
+  local force="${2:-0}"
+  local target="${base}/remote-prepare"
+  local source="${SCRIPT_DIR}/.zsh/plugins/remote-prepare"
+  local label="Plugin remote-prepare (custom)"
+
+  if [[ -d "${target}" ]]; then
+    if ((force == 0)); then
+      note "remote-prepare present"
+      return 0
+    fi
+    step "${label} (refresh)"
+    if ! core::run rm -rf "${target}"; then
+      warn "remote-prepare cleanup failed"
+      return 1
+    fi
+  else
+    step "${label}"
+  fi
+
+  if core::is_remote_install; then
+    local base_url="${REPO_URL:-https://raw.githubusercontent.com/dipodidae/dotfiles/main}"
+    local plugin_path="${base_url}/.zsh/plugins/remote-prepare/remote-prepare.plugin.zsh"
+
+    if ! core::run mkdir -p "${target}"; then
+      warn "remote-prepare directory creation failed"
+      return 1
+    fi
+
+    if core::download "${plugin_path}" "${target}/remote-prepare.plugin.zsh"; then
+      success "remote-prepare (custom, remote)"
+      return 0
+    fi
+
+    warn "remote-prepare download failed"
+    core::run rm -rf "${target}"
+    return 1
+  fi
+
+  if [[ ! -d "${source}" ]]; then
+    warn "remote-prepare plugin source not found at ${source}"
+    return 1
+  fi
+
+  if core::run cp -r "${source}" "${target}"; then
+    success "remote-prepare (custom, local)"
+    return 0
+  fi
+
+  warn "remote-prepare copy failed"
+  return 1
+}
+
+#######################################
 # zsh::install_plugins
 # Clone or update all configured zsh plugins.
 # Outputs:
@@ -240,6 +308,41 @@ zsh::install_plugins() {
   # Install custom plugins (from local dotfiles or download when remote)
   zsh::install_spend_cloud_plugin "${base}"
   zsh::install_ssh_transfer_plugin "${base}"
+  zsh::install_remote_prepare_plugin "${base}"
+}
+
+#######################################
+# zsh::ensure_workspace_dirs
+# Ensure directories referenced by .zshrc clone/navigation helpers exist.
+# Globals:
+#   HOME
+# Outputs:
+#   Step/note messages
+#######################################
+zsh::ensure_workspace_dirs() {
+  local -a dirs=(
+    "${HOME}/development"
+    "${HOME}/repros"
+    "${HOME}/forks"
+    "${HOME}/projects"
+  )
+
+  step "Ensuring workspace directories"
+
+  local dir created=0
+  for dir in "${dirs[@]}"; do
+    if [[ -d "${dir}" ]]; then
+      note "Workspace present: ${dir/#${HOME}/~}"
+      continue
+    fi
+    fs::ensure_dir "${dir}"
+    ((created++))
+    success "Workspace created: ${dir/#${HOME}/~}"
+  done
+
+  if ((created == 0)); then
+    note "Workspace directories already in place"
+  fi
 }
 
 #######################################
@@ -345,4 +448,5 @@ zsh::setup() {
   zsh::install_oh_my_zsh
   zsh::install_pure_prompt
   zsh::install_plugins
+  zsh::ensure_workspace_dirs
 }

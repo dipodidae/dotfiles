@@ -4,7 +4,8 @@
 set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly LOG_FILE="${HOME}/.dotfiles-plugin-update.log"
+readonly DEFAULT_LOG_FILE="${HOME}/.dotfiles-plugin-update.log"
+LOG_FILE="${DEFAULT_LOG_FILE}"
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   readonly C_RESET='\033[0m'
@@ -27,8 +28,6 @@ else
   readonly C_CYAN=""
   readonly C_BOLD=""
 fi
-
-[[ -f "${LOG_FILE}" ]] || : > "${LOG_FILE}"
 
 DRY_RUN="0"
 
@@ -72,6 +71,13 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+if [[ "${DRY_RUN}" == "1" ]]; then
+  LOG_FILE="/dev/null"
+else
+  [[ -f "${LOG_FILE}" ]] || : > "${LOG_FILE}"
+fi
+readonly LOG_FILE
+
 modules=(logging core fs zsh)
 for module in "${modules[@]}"; do
   module_path="${SCRIPT_DIR}/lib/${module}.sh"
@@ -95,9 +101,17 @@ done
 cleanup() {
   local rc=$?
   if ((rc != 0)); then
-    error "Plugin update failed (exit ${rc}). See ${LOG_FILE}."
+    if [[ "${DRY_RUN}" == "1" ]]; then
+      error "Plugin update failed (exit ${rc})."
+    else
+      error "Plugin update failed (exit ${rc}). See ${LOG_FILE}."
+    fi
   else
-    note "Log written to ${LOG_FILE}."
+    if [[ "${DRY_RUN}" == "1" ]]; then
+      note "(dry-run) No log file written."
+    else
+      note "Log written to ${LOG_FILE}."
+    fi
   fi
 }
 trap cleanup EXIT
@@ -115,6 +129,11 @@ trap cleanup EXIT
 update_custom_plugin() {
   local slug="$1" installer="$2" base="$3"
 
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    note "(dry-run) Would refresh ${slug}"
+    return 0
+  fi
+
   if "$installer" "${base}" 1; then
     return 0
   fi
@@ -130,14 +149,19 @@ main() {
 
   headline "Update custom zsh plugins"
 
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    note "Dry-run mode: no filesystem changes will be made."
+  fi
+
   local base="${ZSH_CUSTOM:-${HOME}/.oh-my-zsh/custom}/plugins"
   fs::ensure_dir "${base}"
 
   local -A installers=(
     ["spend-cloud"]=zsh::install_spend_cloud_plugin
     ["ssh-transfer"]=zsh::install_ssh_transfer_plugin
+    ["remote-prepare"]=zsh::install_remote_prepare_plugin
   )
-  local -a plugins=("spend-cloud" "ssh-transfer")
+  local -a plugins=("spend-cloud" "ssh-transfer" "remote-prepare")
 
   local plugin installer
   local -i failures=0
