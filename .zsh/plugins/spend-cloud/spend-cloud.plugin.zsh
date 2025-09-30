@@ -21,7 +21,6 @@ if [[ -n "${_SPEND_CLOUD_PLUGIN_LOADED:-}" ]]; then
 fi
 readonly _SPEND_CLOUD_PLUGIN_LOADED=1
 
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONSTANTS & CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -567,7 +566,10 @@ migrate() {
     debug | each) _migrate_debug "${container}" ;;
     group) _migrate_group "${container}" "${2}" ;;
     status) _migrate_exec "${container}" migrate:status ;;
-    tinker) shift; _migrate_exec "${container}" tinker "$@" ;;
+    tinker)
+      shift
+      _migrate_exec "${container}" tinker "$@"
+      ;;
     customers) _migrate_path "${container}" "customers" ;;
     config) _migrate_path "${container}" "config" ;;
     shared | sharedstorage) _migrate_path "${container}" "sharedStorage" ;;
@@ -891,9 +893,18 @@ nuke() {
   # Parse arguments
   while [[ $# -gt 0 ]]; do
     case "${1}" in
-      --verify | -v) mode="verify"; shift ;;
-      --help | -h) _nuke_help; return 0 ;;
-      --) shift; break ;;
+      --verify | -v)
+        mode="verify"
+        shift
+        ;;
+      --help | -h)
+        _nuke_help
+        return 0
+        ;;
+      --)
+        shift
+        break
+        ;;
       -*)
         _nuke_err "Unknown flag: ${1}"
         _nuke_help
