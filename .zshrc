@@ -65,6 +65,7 @@ plugins=(
   zsh-syntax-highlighting
   zsh-z
   you-should-use
+  ssh-transfer
   spend-cloud
 )
 

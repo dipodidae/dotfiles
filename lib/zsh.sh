@@ -136,6 +136,64 @@ zsh::install_spend_cloud_plugin() {
 }
 
 #######################################
+# zsh::install_ssh_transfer_plugin
+# Install custom ssh-transfer plugin from local dotfiles or remote repo.
+# Arguments:
+#   1 - base plugins directory path
+# Globals:
+#   SCRIPT_DIR
+#   REPO_URL (for remote installs)
+# Outputs:
+#   Step/success/warn/note messages
+# Returns:
+#   0 on success or skip, 1 on failure
+#######################################
+zsh::install_ssh_transfer_plugin() {
+  local base="$1"
+  local target="${base}/ssh-transfer"
+  local source="${SCRIPT_DIR}/.zsh/plugins/ssh-transfer"
+
+  if [[ -d "${target}" ]]; then
+    note "ssh-transfer present"
+    return 0
+  fi
+
+  step "Plugin ssh-transfer (custom)"
+
+  if core::is_remote_install; then
+    local base_url="${REPO_URL:-https://raw.githubusercontent.com/dipodidae/dotfiles/main}"
+    local plugin_path="${base_url}/.zsh/plugins/ssh-transfer/ssh-transfer.plugin.zsh"
+
+    if ! core::run mkdir -p "${target}"; then
+      warn "ssh-transfer directory creation failed"
+      return 1
+    fi
+
+    if core::download "${plugin_path}" "${target}/ssh-transfer.plugin.zsh"; then
+      success "ssh-transfer (custom, remote)"
+      return 0
+    fi
+
+    warn "ssh-transfer download failed"
+    core::run rm -rf "${target}"
+    return 1
+  fi
+
+  if [[ ! -d "${source}" ]]; then
+    warn "ssh-transfer plugin source not found at ${source}"
+    return 1
+  fi
+
+  if core::run cp -r "${source}" "${target}"; then
+    success "ssh-transfer (custom, local)"
+    return 0
+  fi
+
+  warn "ssh-transfer copy failed"
+  return 1
+}
+
+#######################################
 # zsh::install_plugins
 # Clone or update all configured zsh plugins.
 # Outputs:
@@ -159,8 +217,9 @@ zsh::install_plugins() {
     zsh::install_plugin "$name" "$url" "$base"
   done
 
-  # Install custom spend-cloud plugin (from local dotfiles or skip if remote)
+  # Install custom plugins (from local dotfiles or download when remote)
   zsh::install_spend_cloud_plugin "${base}"
+  zsh::install_ssh_transfer_plugin "${base}"
 }
 
 #######################################

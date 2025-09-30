@@ -105,7 +105,13 @@ core::is_remote_install() {
 #######################################
 core::download() {
   local relative_path="$1" dest="$2"
-  local src="${DOTFILES_RAW}/${relative_path}"
+  local src
+
+  if [[ "${relative_path}" =~ ^https?:// ]]; then
+    src="${relative_path}"
+  else
+    src="${DOTFILES_RAW}/${relative_path}"
+  fi
   core::retry_cmd 3 curl -fsSL "${src}" -o "${dest}"
 }
 
