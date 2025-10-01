@@ -56,7 +56,6 @@ export ZSH="${HOME}/.oh-my-zsh"
 
 fpath+=("${HOME}/.zsh/plugins")
 fpath+=("${HOME}/.zsh/pure")
-# Add repo-local custom plugin path (git-identity lives here)
 fpath+=("${HOME}/projects/dotfiles/.zsh/plugins")
 
 _zshrc_unalias_conflicts
@@ -70,7 +69,6 @@ plugins=(
   ssh-transfer
   remote-prepare
   spend-cloud
-  # git-identity
 )
 
 if [[ -f "${ZSH}/oh-my-zsh.sh" ]]; then
@@ -99,16 +97,6 @@ zstyle :prompt:pure:prompt:error color red
 autoload -Uz promptinit
 promptinit
 prompt pure
-
-# git-identity prompt location (left|right|both). Uncomment to move segment.
-export GIT_ID_PROMPT_SIDE=left
-
-export GIT_ID_PERSONAL_NAME="dpdd"
-export GIT_ID_PERSONAL_EMAIL="dpdd@squat.net"
-export GIT_ID_PERSONAL_KEY="${HOME}/.ssh/dpdd-github"
-export GIT_ID_WORK_NAME="Tom"
-export GIT_ID_WORK_EMAIL="tom.van.veen@visma.com"
-export GIT_ID_WORK_KEY="${HOME}/.ssh/id_ed25519_spendcloud"
 
 alias edit-pure='${EDITOR:-vi} +/PURE\ PROMPT\ CONFIGURATION ~/.zshrc'
 
@@ -402,5 +390,3 @@ zstyle ':completion:*:approximate:*' max-errors 1 numeric
 # ────────────────────────────────────────────────────────────────────────────────
 # LOCAL PLUGINS / EXTENSIONS
 # ────────────────────────────────────────────────────────────────────────────────
-
-# git-identity plugin is loaded via plugins array. (See .zsh/plugins/git-identity)

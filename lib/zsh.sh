@@ -313,41 +313,6 @@ zsh::install_plugins() {
 }
 
 #######################################
-# zsh::install_git_identity_plugin
-# Install git-identity plugin (local working copy) so oh-my-zsh can source it.
-# Arguments:
-#   1 - base plugins directory path
-# Outputs:
-#   Step/success/warn/note messages
-# Returns:
-#   0 on success or skip, 1 on failure
-#######################################
-zsh::install_git_identity_plugin() {
-  local base="$1"
-  local target="${base}/git-identity"
-  local source="${SCRIPT_DIR}/.zsh/plugins/git-identity"
-  local label="Plugin git-identity (custom)"
-
-  if [[ -d "${target}" ]]; then
-    note "git-identity present"
-    return 0
-  fi
-  step "${label}"
-
-  if [[ ! -d "${source}" ]]; then
-    warn "git-identity source not found at ${source}"
-    return 1
-  fi
-
-  if core::run cp -r "${source}" "${target}"; then
-    success "git-identity (custom, local)"
-    return 0
-  fi
-  warn "git-identity copy failed"
-  return 1
-}
-
-#######################################
 # zsh::ensure_workspace_dirs
 # Ensure directories referenced by .zshrc clone/navigation helpers exist.
 # Globals:
