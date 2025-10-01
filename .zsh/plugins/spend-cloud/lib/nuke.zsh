@@ -207,6 +207,7 @@ _nuke_analyze() {
 
   if [[ -n "${dbs}" ]]; then
     _nuke_info '  - databases:'
+    local _db
     while IFS= read -r _db; do
       printf '      * %s\n' "${_db}"
     done <<<"${dbs}"
@@ -240,6 +241,7 @@ _nuke_execute() {
 
   # Drop databases
   if [[ -n "${dbs}" ]]; then
+    local db
     while IFS= read -r db; do
       [[ -z "${db}" ]] && continue
       _nuke_info "  - drop db ${db}"

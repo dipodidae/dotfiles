@@ -88,7 +88,7 @@ _spend_cloud_hub_select() {
     echo ""
 
     local -a menu_items
-    local i=1
+    local i=1 cmd desc
     while IFS=$'\t' read -r cmd desc; do
       printf '%s%2d)%s %s%s%s - %s\n' \
         "${C_CYAN}" "$i" "${C_RESET}" \
