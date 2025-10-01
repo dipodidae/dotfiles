@@ -56,6 +56,8 @@ export ZSH="${HOME}/.oh-my-zsh"
 
 fpath+=("${HOME}/.zsh/plugins")
 fpath+=("${HOME}/.zsh/pure")
+# Add repo-local custom plugin path (git-identity lives here)
+fpath+=("${HOME}/projects/dotfiles/.zsh/plugins")
 
 _zshrc_unalias_conflicts
 
@@ -68,6 +70,7 @@ plugins=(
   ssh-transfer
   remote-prepare
   spend-cloud
+  git-identity
 )
 
 if [[ -f "${ZSH}/oh-my-zsh.sh" ]]; then
@@ -385,3 +388,9 @@ setopt ALWAYS_TO_END
 zstyle ':completion:*' completer _complete _match _approximate
 zstyle ':completion:*:match:*' original only
 zstyle ':completion:*:approximate:*' max-errors 1 numeric
+
+# ────────────────────────────────────────────────────────────────────────────────
+# LOCAL PLUGINS / EXTENSIONS
+# ────────────────────────────────────────────────────────────────────────────────
+
+# git-identity plugin is loaded via plugins array. (See .zsh/plugins/git-identity)
