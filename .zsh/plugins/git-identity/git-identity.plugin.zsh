@@ -47,17 +47,23 @@
 # Standard $0 handling & plugin context
 ########################################
 # shellcheck disable=SC2277,SC2296,SC2298,SC2299 # zsh-specific $0 resolution idiom
-0="${ZERO:-${${0:#$ZSH_ARGZERO}:-${(%):-%N}}}"
-0="${${(M)0:#/*}:-$PWD/$0}"
+# Resolve script path without reassigning $0 (avoids tooling conflicts)
+GitIdentityState[script]="${ZERO:-${(%):-%N}}"
+if [[ ${GitIdentityState[script]} != /* ]]; then
+  GitIdentityState[script]="${PWD}/${GitIdentityState[script]}"
+fi
 
 # Global state containers
 typeset -gA GitIdentityState
-GitIdentityState[dir]="${0:h}"
+GitIdentityState[dir]="${GitIdentityState[script]:-}${GitIdentityState[script]:+}"  # placeholder; reset below
+if [[ -n ${GitIdentityState[script]:-} ]]; then
+  GitIdentityState[dir]="${GitIdentityState[script]:h}"
+fi
 
 if ! typeset -p Plugins &>/dev/null; then
   typeset -gA Plugins
 fi
-Plugins[git_identity_dir]="${0:h}"
+Plugins[git_identity_dir]="${GitIdentityState[dir]}"
 
 # Prevent double loading
 if [[ -n ${GitIdentityState[loaded]:-} ]]; then
@@ -90,6 +96,9 @@ _gitid_infer_defaults
 # ------------------------- Helpers -------------------------------------------
 _gitid_log() { echo "[git-identity] $*" >&2; }
 _gitid_in_repo() { git rev-parse --is-inside-work-tree >/dev/null 2>&1; }
+
+# Determine desired prompt side(s): right (default), left, or both.
+: "${GIT_ID_PROMPT_SIDE:=right}"  # left|right|both
 
 _gitid_detect_profile() {
   _gitid_emulate
@@ -246,6 +255,7 @@ _gitid_prompt_segment() {
 _gitid_update_rprompt() {
   _gitid_emulate
   ((${GIT_ID_HIDE_PROMPT:-0} == 1)) && return 0
+  [[ ${GIT_ID_PROMPT_SIDE} == left ]] && return 0  # skip if only left
   local seg
   seg="$(_gitid_prompt_segment)" || true
   if [[ -n "${seg}" ]]; then
@@ -265,6 +275,43 @@ _gitid_update_rprompt() {
 autoload -Uz add-zsh-hook 2>/dev/null || true
 add-zsh-hook chpwd _gitid_auto_maybe 2>/dev/null || true
 add-zsh-hook precmd _gitid_update_rprompt 2>/dev/null || true
+
+# --- Pure prompt left-side integration wrapper (optional) ------------------
+# If user wants left or both, wrap prompt_pure_preprompt_render after pure loads.
+_gitid_wrap_pure_left() {
+  _gitid_emulate
+  ((${GIT_ID_HIDE_PROMPT:-0} == 1)) && return 0
+  [[ ${GIT_ID_PROMPT_SIDE} == right ]] && return 0
+  [[ -n ${GitIdentityState[pure_wrapped]:-} ]] && return 0
+  # Only proceed if pure's render function exists.
+  typeset -f prompt_pure_preprompt_render &>/dev/null || return 0
+  # Capture original definition and create a renamed copy.
+  if ! typeset -f _gitid_orig_pure_preprompt_render &>/dev/null; then
+    local def
+    def="$(functions prompt_pure_preprompt_render)" || return 0
+    # Replace first function name with our original name.
+    def="${def/prompt_pure_preprompt_render /_gitid_orig_pure_preprompt_render }"
+    eval "$def" || return 0
+  fi
+  prompt_pure_preprompt_render() {
+    _gitid_emulate
+    _gitid_orig_pure_preprompt_render "$@"  # render original
+    local seg
+    seg="$(_gitid_prompt_segment)" || true
+    [[ -z $seg ]] && return 0
+    # Inject into first line of PROMPT if not already present.
+    local first rest
+    first=${PROMPT%%$'\n'*}
+    rest=${PROMPT#*$'\n'}
+    if [[ $first != *"$seg"* ]]; then
+      PROMPT="${first} ${seg}"$'\n'"${rest}"
+    fi
+  }
+  GitIdentityState[pure_wrapped]=1
+  _gitid_log "wrapped pure prompt for left identity segment"
+}
+
+add-zsh-hook precmd _gitid_wrap_pure_left 2>/dev/null || true
 
 # Initial run
 _gitid_auto_maybe
