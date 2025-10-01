@@ -35,30 +35,75 @@ log() { echo "[INF] $*"; }
 #######################################
 check_bash() {
   log "==> Shellcheck (bash) ..."
-  shellcheck --color=auto --shell=bash \
-    "${REPO_ROOT}"/install.sh \
-    "${REPO_ROOT}"/lib/*.sh \
-    "${REPO_ROOT}"/scripts/*.sh
+  local -a scripts
+  mapfile -t scripts < <(git -C "${REPO_ROOT}" ls-files '*.sh' '*.bash' 2> /dev/null || true)
+
+  if ((${#scripts[@]} == 0)); then
+    log "No bash scripts found"
+    return 0
+  fi
+
+  local -a abs_scripts
+  for script in "${scripts[@]}"; do
+    abs_scripts+=("${REPO_ROOT}/${script}")
+  done
+
+  shellcheck --color=auto --shell=bash "${abs_scripts[@]}"
 }
 
 #######################################
-# Run shellcheck on zsh scripts (advisory).
+# Run syntax validation on zsh scripts (advisory).
+# Uses "zsh -n" because shellcheck cannot parse modern zsh syntax.
 # Matches GitHub Actions "Check shell scripts (zsh)" step.
 # Globals:
 #   REPO_ROOT
 # Returns:
-#   Always 0 (advisory only).
+#   0 when all zsh files parse, 1 if syntax errors were found.
 #######################################
 check_zsh() {
-  log "==> Shellcheck (zsh - advisory) ..."
-  if [[ -d "${REPO_ROOT}/.zsh" ]]; then
-    shellcheck --color=auto --shell=bash --severity=warning \
-      "${REPO_ROOT}"/.zsh/*.zsh 2>&1 || true
-  fi
+  log "==> Zsh syntax check ..."
+
+  local -a zfiles
+  mapfile -t zfiles < <(git -C "${REPO_ROOT}" ls-files '*.zsh' 2> /dev/null || true)
   if [[ -f "${REPO_ROOT}/.zshrc" ]]; then
-    shellcheck --color=auto --shell=bash --severity=warning \
-      "${REPO_ROOT}/.zshrc" 2>&1 || true
+    zfiles+=(".zshrc")
   fi
+
+  if ((${#zfiles[@]} == 0)); then
+    log "No zsh files found"
+    return 0
+  fi
+
+  if ! command -v zsh > /dev/null; then
+    log "zsh binary not available; skipping syntax check"
+    return 0
+  fi
+
+  local -a abs_zfiles
+  for file in "${zfiles[@]}"; do
+    abs_zfiles+=("${REPO_ROOT}/${file}")
+  done
+
+  local -a failed
+  local status=0
+  local candidate
+  local tmp_zdotdir
+  tmp_zdotdir="$(mktemp -d)"
+  for candidate in "${abs_zfiles[@]}"; do
+    if ! ZDOTDIR="${tmp_zdotdir}" zsh --no-rcs --no-globalrcs -n -- "${candidate}" > /dev/null 2>&1; then
+      failed+=("${candidate}")
+      status=1
+    fi
+  done
+  rm -rf "${tmp_zdotdir}"
+
+  if ((status != 0)); then
+    err "Zsh syntax errors detected in:"
+    printf '  %s\n' "${failed[@]}" >&2
+    return 1
+  fi
+
+  log "Zsh syntax looks good"
 }
 
 #######################################
@@ -71,10 +116,21 @@ check_zsh() {
 #######################################
 check_format() {
   log "==> Check formatting (shfmt -i 2 -ci -sr) ..."
-  if ! shfmt -i 2 -ci -sr -d \
-    "${REPO_ROOT}"/install.sh \
-    "${REPO_ROOT}"/lib/*.sh \
-    "${REPO_ROOT}"/scripts/*.sh; then
+
+  local -a format_targets
+  mapfile -t format_targets < <(git -C "${REPO_ROOT}" ls-files 'install.sh' 'lib/*.sh' 'scripts/*.sh' 2> /dev/null || true)
+
+  if ((${#format_targets[@]} == 0)); then
+    log "No shell files found for formatting"
+    return 0
+  fi
+
+  local -a abs_format_targets
+  for file in "${format_targets[@]}"; do
+    abs_format_targets+=("${REPO_ROOT}/${file}")
+  done
+
+  if ! shfmt -i 2 -ci -sr -d "${abs_format_targets[@]}"; then
     err "Formatting issues detected. Run: shfmt -i 2 -ci -sr -w ."
     return 1
   fi
@@ -109,7 +165,7 @@ main() {
 
   # Run all checks (continue on failure to show all issues)
   check_bash || exit_code=1
-  check_zsh # Advisory only, never fails
+  check_zsh || exit_code=1
   check_format || exit_code=1
   check_audit || exit_code=1
 

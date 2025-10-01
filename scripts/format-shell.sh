@@ -22,6 +22,8 @@ main() {
     check_only=1
   fi
 
+  cd "${REPO_ROOT}"
+
   local -a shfmt_args=(-i 2 -ci -sr)
 
   if ((check_only)); then
@@ -32,10 +34,15 @@ main() {
     shfmt_args+=(-w)
   fi
 
-  if shfmt "${shfmt_args[@]}" \
-    "${REPO_ROOT}"/install.sh \
-    "${REPO_ROOT}"/lib/*.sh \
-    "${REPO_ROOT}"/scripts/*.sh; then
+  local -a targets
+  mapfile -t targets < <(git ls-files '*.sh' '*.bash' 2> /dev/null || true)
+
+  if ((${#targets[@]} == 0)); then
+    echo "No shell files found"
+    return 0
+  fi
+
+  if shfmt "${shfmt_args[@]}" "${targets[@]}"; then
     echo "✓ All files properly formatted."
   else
     if ((check_only)); then

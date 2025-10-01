@@ -5,7 +5,7 @@
 #  2. Scripts > 120 lines missing a main() definition + final main invocation.
 #  3. Warn on files > 400 lines (suggest rewrite consideration).
 
-set -euo pipefail
+set -Eeuo pipefail
 shopt -s nullglob
 
 #######################################

@@ -31,10 +31,10 @@ This repo follows **one canonical linting pipeline** (defined in `.github/workfl
 make lint              # or: ./scripts/lint-shell.sh
 
 # Auto-format all shell files
-./scripts/format-shell.sh
+make format            # or: ./scripts/format-shell.sh
 
 # Check formatting only
-./scripts/format-shell.sh --check
+make format-check      # or: ./scripts/format-shell.sh --check
 ```
 
 ### Pre-commit Hooks (Optional)
@@ -44,12 +44,14 @@ pre-commit install     # Auto-lint on commit
 pre-commit run --all-files
 ```
 
+The `pre-commit` hook invokes `scripts/lint-shell.sh`, so local commits and CI stay perfectly aligned.
+
 ### What Gets Checked
 
-1. **shellcheck (bash)** - main shell files
-2. **shellcheck (zsh)** - advisory only
-3. **shfmt** - formatting (`-i 2 -ci -sr`)
-4. **audit** - Google Shell Style Guide heuristics
+1. **shellcheck (bash)** — all tracked `.sh` / `.bash` files
+2. **zsh -n syntax validation** — catches real parse errors in `.zsh` configs
+3. **shfmt** — formatting (`-i 2 -ci -sr`)
+4. **audit** — Google Shell Style Guide heuristics (headers, main(), oversized files)
 
 Local = CI = consistent.
 

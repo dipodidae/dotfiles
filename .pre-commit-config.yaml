@@ -11,26 +11,12 @@ repos:
       - id: check-executables-have-shebangs
       - id: check-merge-conflict
 
-  # Shell formatting (matches GitHub Actions shfmt flags: -i 2 -ci -sr)
-  - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.12.0-2
-    hooks:
-      - id: shfmt
-        args: ['-i', '2', '-ci', '-sr', '-d']
-
-  # Shell linting (matches GitHub Actions)
-  - repo: https://github.com/koalaman/shellcheck-precommit
-    rev: v0.11.0
-    hooks:
-      - id: shellcheck
-        files: '\.(sh|bash)$'
-
-  # Style audit (custom heuristics)
+  # Canonical shell lint pipeline (shellcheck + shfmt + heuristics)
   - repo: local
     hooks:
-      - id: shell-audit
-        name: Shell style audit
-        entry: bash scripts/audit-shell-style.sh
+      - id: shell-lint
+        name: Shell lint (canonical pipeline)
+        entry: scripts/lint-shell.sh
         language: system
         pass_filenames: false
-        files: '\.sh$'
+        always_run: true

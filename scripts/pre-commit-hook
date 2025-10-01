@@ -3,7 +3,7 @@
 # Git pre-commit hook to enforce shell formatting
 # Install with: ln -sf ../../scripts/pre-commit-hook .git/hooks/pre-commit
 
-set -euo pipefail
+set -Eeuo pipefail
 
 #######################################
 # Main function for git pre-commit hook
@@ -23,13 +23,13 @@ main() {
   echo "Checking shell formatting..."
 
   # Check if any shell files need formatting
-  if ! make format-check > /dev/null 2>&1; then
+  if ! make format-check >/dev/null 2>&1; then
     echo "❌ Shell files need formatting!" >&2
     echo "" >&2
     echo "Fix with one of:" >&2
     echo "  make format" >&2
     echo "  ./format-shell" >&2
-    echo "  ./scripts/format-simple.sh" >&2
+    echo "  ./scripts/format-shell.sh" >&2
     echo "" >&2
     echo "Then stage the changes and commit again." >&2
     exit 1

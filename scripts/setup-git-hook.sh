@@ -2,7 +2,7 @@
 #
 # Setup git hook for automatic shell formatting checks
 
-set -euo pipefail
+set -Eeuo pipefail
 
 #######################################
 # Main function to set up git pre-commit hook
