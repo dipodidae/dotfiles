@@ -12,6 +12,10 @@
 #   0 always (empty if no containers)
 #######################################
 _sc_list_dev_containers() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   docker ps -a --format "{{.Names}}" | grep -E "${SC_DEV_CONTAINER_PATTERN}" 2>/dev/null || true
 }
 
@@ -25,6 +29,10 @@ _sc_list_dev_containers() {
 #   0 always
 #######################################
 _sc_stop_and_remove_containers() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local names
   names="$(cat)"
   [[ -z "${names}" ]] && return 0
@@ -40,6 +48,10 @@ _sc_stop_and_remove_containers() {
 #   0 always
 #######################################
 _sc_cleanup_existing_containers() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   _sc_info "🔍 Checking for existing containers..."
   local containers
   containers="$(_sc_list_dev_containers | head -15)"
@@ -73,6 +85,10 @@ _sc_cleanup_existing_containers() {
 #   0 on success, 1 on failure
 #######################################
 _sc_start_dev_service() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local service_dir="${1}" log_prefix="${2}" color="${3}"
 
   if [[ ! -d "${service_dir}" ]]; then
@@ -104,6 +120,10 @@ _sc_start_dev_service() {
 #   0 if all services started, 1 if any failed
 #######################################
 _sc_start_all_dev_services() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   sleep 2
   local fail=0
 

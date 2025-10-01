@@ -10,6 +10,10 @@
 #   0 always
 #######################################
 _cluster_stop() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   _sc_warn "🛑 Stopping all cluster services..."
   _sc_info "🔍 Stopping and removing all containers..."
 
@@ -35,6 +39,10 @@ _cluster_stop() {
 #   0 always
 #######################################
 _cluster_logs() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local service="${1}"
   if [[ -n "${service}" ]]; then
     _sc_info "📋 Showing logs for service: ${service}"
@@ -55,6 +63,10 @@ _cluster_logs() {
 #   0 on success, 1 on cluster start failure
 #######################################
 _cluster_start() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local rebuild="${1}"
 
   _sc_cleanup_existing_containers
@@ -105,6 +117,10 @@ EOF
 #   0 on success, 1 on failure
 #######################################
 cluster() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   _sc_require_command sct "Install the SpendCloud CLI (sct)" || return 1
 
   case "${1:-start}" in

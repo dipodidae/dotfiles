@@ -13,6 +13,10 @@
 #   Exit status from sct command
 #######################################
 _cluster_import_run_with_input() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local input="${1}"
   shift
   printf '%s\n' "${input}" | sct henk import "$@" 2>&1 | _cluster_import_filter_output
@@ -29,6 +33,10 @@ _cluster_import_run_with_input() {
 #   Exit status from sct command
 #######################################
 _cluster_import_run_interactive() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   sct henk import "$@"
 }
 
@@ -42,6 +50,10 @@ _cluster_import_run_interactive() {
 #   0 on success, 1 if errors detected
 #######################################
 _cluster_import_filter_output() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local line step="downloading" client_name="" error_msg=""
 
   while IFS= read -r line; do
@@ -130,6 +142,10 @@ _cluster_import_filter_output() {
 #   Always 0 (errors are handled by caller)
 #######################################
 _cluster_import_probe() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local -a args
   args=("$@")
   local sentinel="__cluster_wrapper_probe__" output
@@ -148,6 +164,10 @@ _cluster_import_probe() {
 #   0 on success, 1 if no options found
 #######################################
 _cluster_import_parse_options() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local probe_output="${1}"
   [[ -n "${probe_output}" ]] || return 1
 
@@ -215,6 +235,10 @@ _cluster_import_parse_options() {
 #   0 always
 #######################################
 _cluster_import_header() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local probe_output="${1}"
   [[ -n "${probe_output}" ]] || return 0
 
@@ -237,6 +261,10 @@ _cluster_import_header() {
 #   Exit status from sct import command
 #######################################
 cluster-import() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   _sc_require_command sct "Install the SpendCloud CLI (sct)" || return 1
 
   if ! command -v fzf >/dev/null 2>&1; then

@@ -18,6 +18,10 @@
 #   0 if found, 1 otherwise
 #######################################
 _migrate_get_container() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   _sc_find_container "${SC_API_CONTAINER_PATTERN}" || {
     echo "API container not found. Start with 'cluster'." >&2
     return 1
@@ -34,6 +38,10 @@ _migrate_get_container() {
 #   0 always
 #######################################
 _migrate_get_groups() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local -a groups=(proactive_config proactive-default sharedStorage customers)
   if [[ -n "${MIGRATION_GROUP_ORDER:-}" ]]; then
     local cleaned="${MIGRATION_GROUP_ORDER// /}"
@@ -68,6 +76,10 @@ _migrate_exec() {
 #   Exit code from migrate-all command
 #######################################
 _migrate_all() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local container="${1}"
   local -a groups
   IFS=' ' read -r -A groups <<<"$(_migrate_get_groups)"
@@ -79,6 +91,10 @@ _migrate_all() {
 }
 
 _migrate_debug() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local container="${1}"
   local -a groups
   IFS=' ' read -r -A groups <<<"$(_migrate_get_groups)"
@@ -183,6 +199,10 @@ EOF
 #   0 on success, 1 on failure or invalid option
 #######################################
 migrate() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local container
   container="$(_migrate_get_container)" || return 1
 

@@ -9,7 +9,13 @@
 # Outputs:
 #   Writes to stderr
 #######################################
-_nuke_err() { printf 'ERROR: %s\n' "$*" >&2; }
+_nuke_err() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
+  printf 'ERROR: %s\n' "$*" >&2
+}
 
 #######################################
 # Print nuke warning message to stderr.
@@ -18,7 +24,13 @@ _nuke_err() { printf 'ERROR: %s\n' "$*" >&2; }
 # Outputs:
 #   Writes to stderr
 #######################################
-_nuke_warn() { printf 'WARN: %s\n' "$*" >&2; }
+_nuke_warn() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
+  printf 'WARN: %s\n' "$*" >&2
+}
 
 #######################################
 # Print nuke info message to stdout.
@@ -27,7 +39,13 @@ _nuke_warn() { printf 'WARN: %s\n' "$*" >&2; }
 # Outputs:
 #   Writes to stdout
 #######################################
-_nuke_info() { printf '%s\n' "$*"; }
+_nuke_info() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
+  printf '%s\n' "$*"
+}
 
 #######################################
 # Prompt user for confirmation.
@@ -40,6 +58,10 @@ _nuke_info() { printf '%s\n' "$*"; }
 #   0 if response matches expected, 1 otherwise
 #######################################
 _nuke_confirm() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   local prompt="${1}" expected="${2}" reply
   printf '%s' "${prompt}" >&2
   read -r reply || return 1
@@ -54,6 +76,10 @@ _nuke_confirm() {
 #   0 always (empty if not found)
 #######################################
 _nuke_get_container() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   docker ps --format '{{.Names}}' | grep -E '^spend-cloud-api$' | head -1
 }
 
@@ -284,6 +310,10 @@ EOF
 #   0 on success/safe abort, 1-5 on errors, 99 if ENABLE_NUKE not set
 #######################################
 nuke() {
+  emulate -L zsh ${=${options[xtrace]:#off}:+-o xtrace}
+  setopt extended_glob warn_create_global typeset_silent no_short_loops rc_quotes no_auto_pushd
+  local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
+
   [[ -z "${ENABLE_NUKE:-}" ]] && {
     echo "Refusing to run: set ENABLE_NUKE=1 to allow nuke (export ENABLE_NUKE=1)" >&2
     return 99
