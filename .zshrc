@@ -100,6 +100,16 @@ autoload -Uz promptinit
 promptinit
 prompt pure
 
+# git-identity prompt location (left|right|both). Uncomment to move segment.
+export GIT_ID_PROMPT_SIDE=left
+
+export GIT_ID_PERSONAL_NAME="dpdd"
+export GIT_ID_PERSONAL_EMAIL="dpdd@squat.net"
+export GIT_ID_PERSONAL_KEY="${HOME}/.ssh/dpdd-github"
+export GIT_ID_WORK_NAME="Tom"
+export GIT_ID_WORK_EMAIL="tom.van.veen@visma.com"
+export GIT_ID_WORK_KEY="${HOME}/.ssh/id_rsa"
+
 alias edit-pure='${EDITOR:-vi} +/PURE\ PROMPT\ CONFIGURATION ~/.zshrc'
 
 # ────────────────────────────────────────────────────────────────────────────────

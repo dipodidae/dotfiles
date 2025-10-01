@@ -309,6 +309,42 @@ zsh::install_plugins() {
   zsh::install_spend_cloud_plugin "${base}"
   zsh::install_ssh_transfer_plugin "${base}"
   zsh::install_remote_prepare_plugin "${base}"
+  zsh::install_git_identity_plugin "${base}"
+}
+
+#######################################
+# zsh::install_git_identity_plugin
+# Install git-identity plugin (local working copy) so oh-my-zsh can source it.
+# Arguments:
+#   1 - base plugins directory path
+# Outputs:
+#   Step/success/warn/note messages
+# Returns:
+#   0 on success or skip, 1 on failure
+#######################################
+zsh::install_git_identity_plugin() {
+  local base="$1"
+  local target="${base}/git-identity"
+  local source="${SCRIPT_DIR}/.zsh/plugins/git-identity"
+  local label="Plugin git-identity (custom)"
+
+  if [[ -d "${target}" ]]; then
+    note "git-identity present"
+    return 0
+  fi
+  step "${label}"
+
+  if [[ ! -d "${source}" ]]; then
+    warn "git-identity source not found at ${source}"
+    return 1
+  fi
+
+  if core::run cp -r "${source}" "${target}"; then
+    success "git-identity (custom, local)"
+    return 0
+  fi
+  warn "git-identity copy failed"
+  return 1
 }
 
 #######################################
@@ -371,6 +407,14 @@ zsh::apply_file() {
     if fs::ensure_symlink "$src" "$dest"; then
       success "symlink $name"
     else
+      # Extra diagnostics for troubleshooting (ENOENT, permissions, etc.)
+      if [[ ! -e "$src" ]]; then
+        error "Source missing for $name: $src"
+      elif [[ -e "$dest" && ! -L "$dest" ]]; then
+        error "Destination exists and is not a symlink: $dest"
+      else
+        error "Unknown symlink failure for $name ($src -> $dest)"
+      fi
       warn "Failed to symlink $name"
     fi
   fi
@@ -398,6 +442,9 @@ zsh::apply_dotfiles() {
 
   if [[ -f "${SCRIPT_DIR}/.zshrc" ]]; then
     zsh::apply_file ".zshrc" "${SCRIPT_DIR}/.zshrc" "${HOME}/.zshrc" symlink
+    if [[ ! -L "${HOME}/.zshrc" ]]; then
+      error "Failed to establish .zshrc symlink (${SCRIPT_DIR}/.zshrc -> ${HOME}/.zshrc)"
+    fi
   else
     warn "Local .zshrc not found"
   fi
