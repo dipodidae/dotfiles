@@ -1,131 +1,268 @@
-# SpendCloud Plugin for Zsh
+# SpendCloud ZSH Plugin# SpendCloud Plugin for Zsh
 
-A comprehensive oh-my-zsh compatible plugin for SpendCloud and Proactive Frame development workflow.
 
-## Features
 
-### Aliases
-- **Navigation**: `sc`, `scapi`, `scui`, `pf`
-- **VS Code**: `cui`, `capi`, `cpf`
-- **Quick Start**: `devapi`
+A comprehensive zsh plugin for SpendCloud development workflow automation.A comprehensive oh-my-zsh compatible plugin for SpendCloud and Proactive Frame development workflow.
+
+
+
+## Features## Features
+
+
+
+- 🚀 Cluster lifecycle management (`cluster` command)### Aliases
+
+- 📥 Interactive database import with fzf (`cluster-import` command)- **Navigation**: `sc`, `scapi`, `scui`, `pf`
+
+- 🗄️ Database migration management (`migrate` command)  - **VS Code**: `cui`, `capi`, `cpf`
+
+- 🧹 Client cleanup utilities (`nuke` command)- **Quick Start**: `devapi`
+
+- 🔗 Quick navigation aliases
 
 ### Functions
-- **`cluster`** - Manage SpendCloud cluster lifecycle and dev services
-- **`migrate`** - Handle database migrations across multiple groups
+
+## Installation- **`cluster`** - Manage SpendCloud cluster lifecycle and dev services
+
+- **`cluster-import`** - Interactive picker for `sct shell cluster import`
+
+Add `spend-cloud` to your plugins array in `~/.zshrc`:- **`migrate`** - Handle database migrations across multiple groups
+
 - **`nuke`** - Destructive client cleanup tool (requires `ENABLE_NUKE=1`)
 
-## Installation
+```zsh
+
+plugins=(git zsh-autosuggestions ... spend-cloud)## Installation
+
+```
 
 ### Automatic Installation (Recommended)
 
+## Structure
+
 This plugin is automatically installed when you run the dotfiles installer:
 
+The plugin is modularized for maintainability:
+
 ```bash
-cd ~/projects/dotfiles
-./install.sh
+
+```cd ~/projects/dotfiles
+
+.zsh/plugins/spend-cloud/./install.sh
+
+├── spend-cloud.plugin.zsh    # Main entry point (loads all modules)```
+
+└── lib/
+
+    ├── common.zsh            # Shared utilities and constantsThe installer will:
+
+    ├── docker.zsh            # Docker container management1. Copy the plugin to `~/.oh-my-zsh/custom/plugins/spend-cloud/`
+
+    ├── aliases.zsh           # Navigation aliases2. Set up all necessary files and permissions
+
+    ├── cluster.zsh           # Cluster lifecycle command
+
+    ├── cluster-import.zsh    # Cluster import commandAfter installation, simply uncomment `spend-cloud` in your `~/.zshrc` plugins array.
+
+    ├── migrate.zsh           # Database migration command
+
+    └── nuke.zsh              # Client cleanup tool### Manual Installation
+
 ```
-
-The installer will:
-1. Copy the plugin to `~/.oh-my-zsh/custom/plugins/spend-cloud/`
-2. Set up all necessary files and permissions
-
-After installation, simply uncomment `spend-cloud` in your `~/.zshrc` plugins array.
-
-### Manual Installation
 
 If you need to install manually, see [INSTALL.md](./INSTALL.md).
 
+## Commands
+
 ### Method 1: Via Plugins Array (Recommended)
 
+### `cluster` - Cluster Lifecycle Management
+
 1. Edit `~/.zshrc`
-2. Uncomment `spend-cloud` in the plugins array:
-   ```zsh
-   plugins=(
-     git
-     zsh-autosuggestions
-     # ...
-     spend-cloud  # Uncomment this line
+
+```bash2. Uncomment `spend-cloud` in the plugins array:
+
+cluster                # Start cluster + dev services   ```zsh
+
+cluster --rebuild      # Rebuild and start with fresh images   plugins=(
+
+cluster stop           # Stop all services     git
+
+cluster logs [service] # View logs     zsh-autosuggestions
+
+cluster help           # Show help     # ...
+
+```     spend-cloud  # Uncomment this line
+
    )
-   ```
+
+### `cluster-import` - Interactive Database Import   ```
+
 3. Restart your shell or run: `exec zsh`
 
-### Method 2: Runtime Toggle
+```bash
+
+cluster-import  # Interactive fzf selection of database dumps### Method 2: Runtime Toggle
+
+```
 
 Enable temporarily without editing `.zshrc`:
-```zsh
-enable-spend-cloud
-```
 
-To disable (requires shell restart for full unload):
+Features:```zsh
+
+- 🔍 Fuzzy search through available dumps (if fzf installed)enable-spend-cloud
+
+- 📅 Human-readable timestamps```
+
+- 🎨 Clean, filtered output
+
+- ⚡ Progress indicatorsTo disable (requires shell restart for full unload):
+
 ```zsh
-disable-spend-cloud
+
+### `migrate` - Database Migrationsdisable-spend-cloud
+
 exec zsh
-```
 
-## Usage Examples
+```bash```
 
-### Cluster Management
+migrate              # Run all migrations in default order
 
-```zsh
-# Start cluster and dev services
-cluster
+migrate debug        # Run each group separately## Usage Examples
 
-# Rebuild with fresh images
-cluster --rebuild
+migrate group <g1,g2>  # Run custom groups
 
-# Stop all services
+migrate status       # Show migration status### Cluster Management
+
+migrate tinker       # Open artisan tinker
+
+migrate customers    # Run customers path only```zsh
+
+migrate config       # Run config path only# Start cluster and dev services
+
+migrate shared       # Run sharedStorage path onlycluster
+
+migrate rollback customers  # Rollback customers migrations
+
+migrate help         # Show help# Rebuild with fresh images
+
+```cluster --rebuild
+
+
+
+### `nuke` - Client Cleanup (Dangerous)# Stop all services
+
 cluster stop
 
-# View logs
-cluster logs
-cluster logs api
+```bash
+
+export ENABLE_NUKE=1  # Required safety flag# View logs
+
+nuke                  # Interactive client selectioncluster logs
+
+nuke --verify <client>  # Analyze without changescluster logs api
+
+nuke <client>         # Clean up specific client
+
+```# Fuzzy-select database import target (requires fzf)
+
+cluster-import
+
+**Warning**: This is a destructive operation. Use with extreme caution.
 
 # Help
-cluster help
+
+## Aliasescluster help
+
 ```
 
-### Database Migrations
+| Alias | Command | Description |
 
-```zsh
-# Run all migration groups
-migrate
+|-------|---------|-------------|### Database Migrations
 
-# Run specific group
-migrate group customers
+| `sc` | `cd ~/development/spend-cloud` | Go to SpendCloud root |
+
+| `scapi` | `sc && cd api` | Go to API directory |```zsh
+
+| `scui` | `sc && cd ui` | Go to UI directory |# Run all migration groups
+
+| `cui` | `code ~/development/spend-cloud/ui` | Open UI in VS Code |migrate
+
+| `capi` | `code ~/development/spend-cloud/api` | Open API in VS Code |
+
+| `devapi` | `scapi && sct dev` | Start API dev server |# Run specific group
+
+| `pf` | `cd ~/development/proactive-frame` | Go to Proactive Frame |migrate group customers
+
+| `cpf` | `code ~/development/proactive-frame` | Open PF in VS Code |
 
 # Debug mode (run each group separately)
-migrate debug
 
-# Status
+## Configurationmigrate debug
+
+
+
+Environment variables (optional):# Status
+
 migrate status
 
-# Rollback
-migrate rollback customers
+- `SC_API_DIR` - API directory path (default: `~/development/spend-cloud/api`)
 
-# Help
-migrate help
+- `SC_PROACTIVE_DIR` - Proactive Frame path (default: `~/development/proactive-frame`)# Rollback
+
+- `SC_DEV_LOG_DIR` - Log directory (default: `~/.cache/spend-cloud/logs`)migrate rollback customers
+
+- `MIGRATION_GROUP_ORDER` - Custom migration group order
+
+- `ENABLE_NUKE` - Required to use `nuke` command (safety)# Help
+
+- `NO_COLOR` - Disable colored outputmigrate help
+
 ```
+
+## Dependencies
 
 ### Client Cleanup (DANGEROUS)
 
-⚠️ **Requires `ENABLE_NUKE=1` environment variable**
+- **Required**: `docker`, `sct` (SpendCloud CLI)
 
-```zsh
+- **Optional**: `fzf` (for interactive selection in `cluster-import`)⚠️ **Requires `ENABLE_NUKE=1` environment variable**
+
+
+
+## Development```zsh
+
 # Enable nuke functionality
-export ENABLE_NUKE=1
 
-# Analyze what would be deleted (safe)
-nuke --verify clientname
+The plugin follows shell scripting best practices:export ENABLE_NUKE=1
 
-# Actually delete (destructive!)
+- Consistent naming conventions (`_sc_*` for private functions)
+
+- Single Responsibility Principle (one file per command)# Analyze what would be deleted (safe)
+
+- Proper error handling and exit codesnuke --verify clientname
+
+- Comprehensive function documentation
+
+- DRY principle (shared utilities in `common.zsh`)# Actually delete (destructive!)
+
 nuke clientname
 
-# Interactive selection
-nuke
+To add a new command:
+
+1. Create a new file in `lib/`# Interactive selection
+
+2. Add source line to `spend-cloud.plugin.zsh`nuke
+
+3. Document in this README
 
 # Help
-nuke --help
+
+## Licensenuke --help
+
 ```
+
+Internal SpendCloud tooling.
 
 ## Environment Variables
 
@@ -143,6 +280,7 @@ nuke --help
 - Docker
 - `sct` (SpendCloud CLI)
 - Oh My Zsh
+- `fzf` (optional, enables `cluster-import` picker)
 
 ## Safety Features
 
