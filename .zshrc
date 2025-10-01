@@ -20,7 +20,7 @@ function _zshrc_source_if_exists() {
 function _zshrc_prepend_path() {
   local candidate="${1}"
   [[ -n "${candidate}" && -d "${candidate}" ]] || return 0
-  path=("${candidate}" "${(@)path}")
+  path=("${candidate}" "${path[@]}")
 }
 
 function _zshrc_unalias_conflicts() {
@@ -42,7 +42,7 @@ function _zshrc_clean_broken_docker_completions() {
   local comp_file
   for comp_file in "${completion_dir}"/_docker*; do
     [[ -L "${comp_file}" && ! -e "${comp_file}" ]] || continue
-    sudo rm -f "${comp_file}" 2> /dev/null || true
+    sudo rm -f "${comp_file}" 2>/dev/null || true
   done
 }
 
@@ -385,22 +385,3 @@ setopt ALWAYS_TO_END
 zstyle ':completion:*' completer _complete _match _approximate
 zstyle ':completion:*:match:*' original only
 zstyle ':completion:*:approximate:*' max-errors 1 numeric
-
-
-## <SPEND_CLOUD_KEYCHAIN>
-## Written on 30-09-2025 at 18:59:24
-
-/usr/bin/keychain /home/tom/.ssh/id_rsa
-source /home/tom/.keychain/PRO-3KS5BY3-sh
-## </SPEND_CLOUD_KEYCHAIN>
-
-
-## <SPEND_CLOUD_PATHS>
-## Written on 30-09-2025 at 19:04:43
-
-export PATH="$PATH:$HOME/.composer/vendor/bin"
-export PATH="$PATH:$(yarn global bin)"
-export PATH="$PATH:$HOME/.local/bin"
-## </SPEND_CLOUD_PATHS>
-
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
