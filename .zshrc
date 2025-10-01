@@ -70,7 +70,7 @@ plugins=(
   ssh-transfer
   remote-prepare
   spend-cloud
-  git-identity
+  # git-identity
 )
 
 if [[ -f "${ZSH}/oh-my-zsh.sh" ]]; then
@@ -108,7 +108,7 @@ export GIT_ID_PERSONAL_EMAIL="dpdd@squat.net"
 export GIT_ID_PERSONAL_KEY="${HOME}/.ssh/dpdd-github"
 export GIT_ID_WORK_NAME="Tom"
 export GIT_ID_WORK_EMAIL="tom.van.veen@visma.com"
-export GIT_ID_WORK_KEY="${HOME}/.ssh/id_rsa"
+export GIT_ID_WORK_KEY="${HOME}/.ssh/id_ed25519_spendcloud"
 
 alias edit-pure='${EDITOR:-vi} +/PURE\ PROMPT\ CONFIGURATION ~/.zshrc'
 
