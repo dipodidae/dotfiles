@@ -53,6 +53,7 @@ source "${SPEND_CLOUD_PLUGIN_DIR}/lib/cluster.zsh"     # Cluster lifecycle manag
 source "${SPEND_CLOUD_PLUGIN_DIR}/lib/cluster-import.zsh"  # Cluster import command
 source "${SPEND_CLOUD_PLUGIN_DIR}/lib/migrate.zsh"     # Database migration command
 source "${SPEND_CLOUD_PLUGIN_DIR}/lib/nuke.zsh"        # Client cleanup tool
+source "${SPEND_CLOUD_PLUGIN_DIR}/lib/hub.zsh"         # Interactive hub command
 
 # ════════════════════════════════════════════════════════════════════════════════
 # UNLOAD SUPPORT (Zsh Plugin Standard section 4)
@@ -74,7 +75,7 @@ spend_cloud_plugin_unload() {
   unalias sc scapi scui cui capi devapi pf cpf 2>/dev/null
 
   # Unfunction all public commands
-  unfunction cluster cluster-import migrate nuke 2>/dev/null
+  unfunction cluster cluster-import migrate nuke spend-cloud 2>/dev/null
 
   # Unfunction all internal functions
   unfunction -m '_sc_*' 2>/dev/null
@@ -82,6 +83,7 @@ spend_cloud_plugin_unload() {
   unfunction -m '_cluster_import_*' 2>/dev/null
   unfunction -m '_migrate_*' 2>/dev/null
   unfunction -m '_nuke_*' 2>/dev/null
+  unfunction -m '_spend_cloud_hub_*' 2>/dev/null
 
   # Remove from fpath
   fpath=("${(@)fpath:#${SPEND_CLOUD_PLUGIN_DIR}/functions}")
