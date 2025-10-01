@@ -53,7 +53,7 @@ _sc_cleanup_existing_containers() {
   local MATCH REPLY; integer MBEGIN MEND; local -a match mbegin mend reply
 
   _sc_info "🔍 Checking for existing containers..."
-  local containers
+  local containers container
   containers="$(_sc_list_dev_containers | head -15)"
 
   if [[ -z "${containers}" ]]; then
