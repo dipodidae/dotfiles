@@ -309,7 +309,6 @@ zsh::install_plugins() {
   zsh::install_spend_cloud_plugin "${base}"
   zsh::install_ssh_transfer_plugin "${base}"
   zsh::install_remote_prepare_plugin "${base}"
-  zsh::install_git_identity_plugin "${base}"
 }
 
 #######################################

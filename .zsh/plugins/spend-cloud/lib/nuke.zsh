@@ -2,6 +2,11 @@
 #
 # Dangerous client cleanup tool for SpendCloud plugin.
 
+typeset -g DB_USERNAME
+typeset -g DB_PASSWORD
+typeset -g DB_SERVICES_HOST
+typeset -g NUKE_CONFIG_DB
+
 #######################################
 # Print nuke error message to stderr.
 # Arguments:
@@ -200,19 +205,19 @@ _nuke_analyze() {
   echo "${folder_clients}" | grep -Fx "${target}" >/dev/null && has_folder=1
   echo "${settings_clients}" | grep -Fx "${target}" >/dev/null && has_settings=1
 
-  _nuke_info "${C_CYAN}Analysis for '${target}':${C_RESET}"
-  printf '  - /data folder: %s\n' "$([[ ${has_folder} -eq 1 ]] && echo present || echo absent)"
-  printf '  - %s entry: %s\n' "${settings_table}" "$([[ ${has_settings} -eq 1 ]] && echo present || echo absent)"
-  printf '  - 00_client row: %s\n' "$([[ ${has_client_row} -eq 1 ]] && echo present || echo absent)"
+  _nuke_info "${C_CYAN}Analysis for '${target}':${C_RESET}" >&2
+  printf '  - /data folder: %s\n' "$([[ ${has_folder} -eq 1 ]] && echo present || echo absent)" >&2
+  printf '  - %s entry: %s\n' "${settings_table}" "$([[ ${has_settings} -eq 1 ]] && echo present || echo absent)" >&2
+  printf '  - 00_client row: %s\n' "$([[ ${has_client_row} -eq 1 ]] && echo present || echo absent)" >&2
 
   if [[ -n "${dbs}" ]]; then
-    _nuke_info '  - databases:'
+    _nuke_info '  - databases:' >&2
     local _db
     while IFS= read -r _db; do
-      printf '      * %s\n' "${_db}"
+      printf '      * %s\n' "${_db}" >&2
     done <<<"${dbs}"
   else
-    _nuke_info '  - databases: none'
+    _nuke_info '  - databases: none' >&2
   fi
 
   echo "${has_folder}:${has_settings}:${has_client_row}:${dbs}:${client_id}"
@@ -234,8 +239,15 @@ _nuke_analyze() {
 #######################################
 _nuke_execute() {
   local container="${1}" target="${2}" settings_table="${3}" analysis="${4}"
-  local has_folder has_settings has_client_row dbs client_id
-  IFS=':' read -r has_folder has_settings has_client_row dbs client_id <<<"${analysis}"
+  local -a analysis_parts
+  analysis_parts=("${(@s/:/)analysis}")
+
+  integer has_folder=0 has_settings=0 has_client_row=0
+  has_folder=${analysis_parts[1]:-0}
+  has_settings=${analysis_parts[2]:-0}
+  has_client_row=${analysis_parts[3]:-0}
+  local dbs="${analysis_parts[4]:-}"
+  local client_id="${analysis_parts[5]:-}"
 
   _nuke_info "${C_RED}Executing NUKE...${C_RESET}"
 

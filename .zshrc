@@ -100,6 +100,82 @@ prompt pure
 
 alias edit-pure='${EDITOR:-vi} +/PURE\ PROMPT\ CONFIGURATION ~/.zshrc'
 
+# Display git identity (user.name/email) inline with Pure's primary prompt line.
+typeset -g _PURE_IDENTITY_LAST_PREFIX=""
+typeset -gi _PURE_IDENTITY_LAST_LEN=0
+
+_pure_identity_segment() {
+  command git rev-parse --is-inside-work-tree &>/dev/null || return
+  local name email
+
+  name="$(command git config --get user.name 2>/dev/null || true)"
+  email="$(command git config --get user.email 2>/dev/null || true)"
+
+  if [[ -z $name ]]; then
+    name="$(command git config --global --get user.name 2>/dev/null || true)"
+  fi
+  if [[ -z $email ]]; then
+    email="$(command git config --global --get user.email 2>/dev/null || true)"
+  fi
+
+  [[ -z $name && -z $email ]] && return
+
+  if [[ -n $name && -n $email ]]; then
+    print -nr -- "%F{245}[${name}::${email}]%f "
+  elif [[ -n $name ]]; then
+    print -nr -- "%F{245}[${name}]%f "
+  else
+    print -nr -- "%F{245}[${email}]%f "
+  fi
+}
+
+_pure_identity_inject() {
+  local seg first_line
+  local -a lines
+  lines=(${(f)PROMPT})
+
+  seg="$(_pure_identity_segment)"
+
+  if (( ${#lines[@]} == 0 )); then
+    PROMPT="$seg"
+    _PURE_IDENTITY_LAST_PREFIX="$seg"
+    _PURE_IDENTITY_LAST_LEN=${#seg}
+    return
+  fi
+
+  first_line="${lines[1]}"
+  if (( _PURE_IDENTITY_LAST_LEN > 0 )) && [[ ${first_line:0:_PURE_IDENTITY_LAST_LEN} == "${_PURE_IDENTITY_LAST_PREFIX}" ]]; then
+    first_line="${first_line:_PURE_IDENTITY_LAST_LEN}"
+  fi
+
+  if [[ -n $seg ]]; then
+    first_line="${seg}${first_line}"
+    _PURE_IDENTITY_LAST_PREFIX="$seg"
+    _PURE_IDENTITY_LAST_LEN=${#seg}
+  else
+    _PURE_IDENTITY_LAST_PREFIX=""
+    _PURE_IDENTITY_LAST_LEN=0
+  fi
+
+  lines[1]="$first_line"
+  PROMPT="${(F)lines}"
+}
+
+_pure_identity_wrap_pure() {
+  if typeset -f prompt_pure_preprompt_render &>/dev/null \
+     && ! typeset -f _pure_identity_orig_preprompt_render &>/dev/null; then
+    functions[_pure_identity_orig_preprompt_render]=$functions[prompt_pure_preprompt_render]
+    prompt_pure_preprompt_render() {
+      _pure_identity_orig_preprompt_render "$@"
+      _pure_identity_inject
+    }
+  fi
+}
+
+autoload -Uz add-zsh-hook
+_pure_identity_wrap_pure
+add-zsh-hook precmd _pure_identity_wrap_pure
+
 # ────────────────────────────────────────────────────────────────────────────────
 # ENVIRONMENT SETUP
 # ────────────────────────────────────────────────────────────────────────────────
@@ -386,7 +462,3 @@ setopt ALWAYS_TO_END
 zstyle ':completion:*' completer _complete _match _approximate
 zstyle ':completion:*:match:*' original only
 zstyle ':completion:*:approximate:*' max-errors 1 numeric
-
-# ────────────────────────────────────────────────────────────────────────────────
-# LOCAL PLUGINS / EXTENSIONS
-# ────────────────────────────────────────────────────────────────────────────────
