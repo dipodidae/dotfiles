@@ -1,6 +1,36 @@
 #!/bin/bash
 # Logging & messaging utilities.
 
+# Initialize color constants if not already set (for standalone module usage)
+if [[ -z "${C_RESET:-}" ]]; then
+  if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    readonly C_RESET='\033[0m'
+    readonly C_DIM='\033[2m'
+    readonly C_RED='\033[31m'
+    readonly C_GREEN='\033[32m'
+    readonly C_YELLOW='\033[33m'
+    readonly C_BLUE='\033[34m'
+    readonly C_MAGENTA='\033[35m'
+    readonly C_CYAN='\033[36m'
+    readonly C_BOLD='\033[1m'
+  else
+    readonly C_RESET=""
+    readonly C_DIM=""
+    readonly C_RED=""
+    readonly C_GREEN=""
+    readonly C_YELLOW=""
+    readonly C_BLUE=""
+    readonly C_MAGENTA=""
+    readonly C_CYAN=""
+    readonly C_BOLD=""
+  fi
+fi
+
+# Initialize LOG_FILE if not already set (for standalone module usage)
+if [[ -z "${LOG_FILE:-}" ]]; then
+  LOG_FILE="${HOME}/.dotfiles-install.log"
+fi
+
 #######################################
 # _ts
 # Prints a compact timestamp (HH:MM:SS) for log prefixing.

@@ -336,7 +336,7 @@ zsh::ensure_workspace_dirs() {
       continue
     fi
     fs::ensure_dir "${dir}"
-    ((created++))
+    created=$((created + 1))
     success "Workspace created: ${dir/#${HOME}/~}"
   done
 
