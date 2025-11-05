@@ -2,7 +2,7 @@
 # Logging & messaging utilities.
 
 # Initialize color constants if not already set (for standalone module usage)
-if [[ -z "${C_RESET:-}" ]]; then
+if [[ ! -v C_RESET ]]; then
   if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
     readonly C_RESET='\033[0m'
     readonly C_DIM='\033[2m'

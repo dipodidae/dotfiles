@@ -355,6 +355,8 @@ zsh::ensure_workspace_dirs() {
 #   4 - mode (download or symlink)
 # Outputs:
 #   Success/warn messages
+# Returns:
+#   0 on success, 1 on failure
 #######################################
 zsh::apply_file() {
   local name="$1" src="$2" dest="$3" mode="$4"
@@ -364,24 +366,31 @@ zsh::apply_file() {
   if [[ "$mode" == "download" ]]; then
     if core::download "$src" "${dest}.tmp" && mv "${dest}.tmp" "$dest"; then
       success "$name applied"
+      return 0
     else
       warn "Failed to apply $name"
+      return 1
     fi
   elif [[ "$mode" == "symlink" ]]; then
+    # Pre-flight check: ensure source exists
+    if [[ ! -e "$src" ]]; then
+      error "Source missing for $name: $src"
+      warn "Failed to establish $name symlink"
+      return 1
+    fi
+    
     if fs::ensure_symlink "$src" "$dest"; then
       success "symlink $name"
+      return 0
     else
-      # Extra diagnostics for troubleshooting (ENOENT, permissions, etc.)
-      if [[ ! -e "$src" ]]; then
-        error "Source missing for $name: $src"
-      elif [[ -e "$dest" && ! -L "$dest" ]]; then
-        error "Destination exists and is not a symlink: $dest"
-      else
-        error "Unknown symlink failure for $name ($src -> $dest)"
-      fi
-      warn "Failed to symlink $name"
+      error "Symlink creation failed for $name ($src -> $dest)"
+      warn "Failed to establish $name symlink"
+      return 1
     fi
   fi
+  
+  warn "Unknown mode '$mode' for $name"
+  return 1
 }
 
 #######################################
@@ -406,9 +415,6 @@ zsh::apply_dotfiles() {
 
   if [[ -f "${SCRIPT_DIR}/.zshrc" ]]; then
     zsh::apply_file ".zshrc" "${SCRIPT_DIR}/.zshrc" "${HOME}/.zshrc" symlink
-    if [[ ! -L "${HOME}/.zshrc" ]]; then
-      error "Failed to establish .zshrc symlink (${SCRIPT_DIR}/.zshrc -> ${HOME}/.zshrc)"
-    fi
   else
     warn "Local .zshrc not found"
   fi
