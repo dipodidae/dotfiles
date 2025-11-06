@@ -42,9 +42,7 @@ typeset -gU path fpath
 
 export ZSH="${HOME}/.oh-my-zsh"
 
-fpath+=("${HOME}/.zsh/plugins")
 fpath+=("${HOME}/.zsh/pure")
-fpath+=("${HOME}/projects/dotfiles/.zsh/plugins")
 
 _zshrc_unalias_conflicts
 
@@ -57,6 +55,7 @@ plugins=(
   ssh-transfer
   remote-prepare
   spend-cloud
+  git-user-switch
 )
 
 if [[ -f "${ZSH}/oh-my-zsh.sh" ]]; then

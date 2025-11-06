@@ -91,6 +91,7 @@ zsh::install_plugins() {
     "spend-cloud=https://github.com/spend-cloud-tom/zsh-plugin-spend-cloud"
     "ssh-transfer=https://github.com/dipodidae/zsh-plugin-ssh-transfer"
     "remote-prepare=https://github.com/dipodidae/zsh-plugin-remote-prepare"
+    "git-user-switch=https://github.com/dipodidae/zsh-plugin-git-user-switch"
   )
 
   local entry name url
