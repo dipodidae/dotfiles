@@ -74,214 +74,6 @@ zsh::install_plugin() {
 }
 
 #######################################
-# zsh::install_spend_cloud_plugin
-# Install custom spend-cloud plugin from local dotfiles or remote repo.
-# Arguments:
-#   1 - base plugins directory path
-#   2 - force refresh flag (optional; default 0)
-# Globals:
-#   SCRIPT_DIR
-#   REPO_URL (for remote installs)
-# Outputs:
-#   Step/success/warn/note messages
-# Returns:
-#   0 on success or skip, 1 on failure
-#######################################
-zsh::install_spend_cloud_plugin() {
-  local base="$1"
-  local force="${2:-0}"
-  local target="${base}/spend-cloud"
-  local source="${SCRIPT_DIR}/.zsh/plugins/spend-cloud"
-  local label="Plugin spend-cloud (custom)"
-
-  if [[ -d "${target}" ]]; then
-    if ((force == 0)); then
-      note "spend-cloud present"
-      return 0
-    fi
-    step "${label} (refresh)"
-    if ! core::run rm -rf "${target}"; then
-      warn "spend-cloud cleanup failed"
-      return 1
-    fi
-  else
-    step "${label}"
-  fi
-
-  # Remote install: download from GitHub
-  if core::is_remote_install; then
-    local base_url="${REPO_URL:-https://raw.githubusercontent.com/dipodidae/dotfiles/main}"
-    local plugin_file="${base_url}/.zsh/plugins/spend-cloud/spend-cloud.plugin.zsh"
-
-    # Create plugin directory
-    if ! core::run mkdir -p "${target}"; then
-      warn "spend-cloud directory creation failed"
-      return 1
-    fi
-
-    # Download main plugin file
-    if core::download "${plugin_file}" "${target}/spend-cloud.plugin.zsh"; then
-      success "spend-cloud (custom, remote)"
-      return 0
-    else
-      warn "spend-cloud download failed"
-      core::run rm -rf "${target}"
-      return 1
-    fi
-  fi
-
-  # Local install: copy from dotfiles repo
-  if [[ ! -d "${source}" ]]; then
-    warn "spend-cloud plugin source not found at ${source}"
-    return 1
-  fi
-
-  if core::run cp -r "${source}" "${target}"; then
-    success "spend-cloud (custom, local)"
-    return 0
-  else
-    warn "spend-cloud copy failed"
-    return 1
-  fi
-}
-
-#######################################
-# zsh::install_ssh_transfer_plugin
-# Install custom ssh-transfer plugin from local dotfiles or remote repo.
-# Arguments:
-#   1 - base plugins directory path
-#   2 - force refresh flag (optional; default 0)
-# Globals:
-#   SCRIPT_DIR
-#   REPO_URL (for remote installs)
-# Outputs:
-#   Step/success/warn/note messages
-# Returns:
-#   0 on success or skip, 1 on failure
-#######################################
-zsh::install_ssh_transfer_plugin() {
-  local base="$1"
-  local force="${2:-0}"
-  local target="${base}/ssh-transfer"
-  local source="${SCRIPT_DIR}/.zsh/plugins/ssh-transfer"
-  local label="Plugin ssh-transfer (custom)"
-
-  if [[ -d "${target}" ]]; then
-    if ((force == 0)); then
-      note "ssh-transfer present"
-      return 0
-    fi
-    step "${label} (refresh)"
-    if ! core::run rm -rf "${target}"; then
-      warn "ssh-transfer cleanup failed"
-      return 1
-    fi
-  else
-    step "${label}"
-  fi
-
-  if core::is_remote_install; then
-    local base_url="${REPO_URL:-https://raw.githubusercontent.com/dipodidae/dotfiles/main}"
-    local plugin_path="${base_url}/.zsh/plugins/ssh-transfer/ssh-transfer.plugin.zsh"
-
-    if ! core::run mkdir -p "${target}"; then
-      warn "ssh-transfer directory creation failed"
-      return 1
-    fi
-
-    if core::download "${plugin_path}" "${target}/ssh-transfer.plugin.zsh"; then
-      success "ssh-transfer (custom, remote)"
-      return 0
-    fi
-
-    warn "ssh-transfer download failed"
-    core::run rm -rf "${target}"
-    return 1
-  fi
-
-  if [[ ! -d "${source}" ]]; then
-    warn "ssh-transfer plugin source not found at ${source}"
-    return 1
-  fi
-
-  if core::run cp -r "${source}" "${target}"; then
-    success "ssh-transfer (custom, local)"
-    return 0
-  fi
-
-  warn "ssh-transfer copy failed"
-  return 1
-}
-
-#######################################
-# zsh::install_remote_prepare_plugin
-# Install custom remote-prepare plugin from local dotfiles or remote repo.
-# Arguments:
-#   1 - base plugins directory path
-#   2 - force refresh flag (optional; default 0)
-# Globals:
-#   SCRIPT_DIR
-#   REPO_URL (for remote installs)
-# Outputs:
-#   Step/success/warn/note messages
-# Returns:
-#   0 on success or skip, 1 on failure
-#######################################
-zsh::install_remote_prepare_plugin() {
-  local base="$1"
-  local force="${2:-0}"
-  local target="${base}/remote-prepare"
-  local source="${SCRIPT_DIR}/.zsh/plugins/remote-prepare"
-  local label="Plugin remote-prepare (custom)"
-
-  if [[ -d "${target}" ]]; then
-    if ((force == 0)); then
-      note "remote-prepare present"
-      return 0
-    fi
-    step "${label} (refresh)"
-    if ! core::run rm -rf "${target}"; then
-      warn "remote-prepare cleanup failed"
-      return 1
-    fi
-  else
-    step "${label}"
-  fi
-
-  if core::is_remote_install; then
-    local base_url="${REPO_URL:-https://raw.githubusercontent.com/dipodidae/dotfiles/main}"
-    local plugin_path="${base_url}/.zsh/plugins/remote-prepare/remote-prepare.plugin.zsh"
-
-    if ! core::run mkdir -p "${target}"; then
-      warn "remote-prepare directory creation failed"
-      return 1
-    fi
-
-    if core::download "${plugin_path}" "${target}/remote-prepare.plugin.zsh"; then
-      success "remote-prepare (custom, remote)"
-      return 0
-    fi
-
-    warn "remote-prepare download failed"
-    core::run rm -rf "${target}"
-    return 1
-  fi
-
-  if [[ ! -d "${source}" ]]; then
-    warn "remote-prepare plugin source not found at ${source}"
-    return 1
-  fi
-
-  if core::run cp -r "${source}" "${target}"; then
-    success "remote-prepare (custom, local)"
-    return 0
-  fi
-
-  warn "remote-prepare copy failed"
-  return 1
-}
-
-#######################################
 # zsh::install_plugins
 # Clone or update all configured zsh plugins.
 # Outputs:
@@ -296,6 +88,9 @@ zsh::install_plugins() {
     "zsh-syntax-highlighting=https://github.com/zsh-users/zsh-syntax-highlighting"
     "zsh-z=https://github.com/agkozak/zsh-z"
     "you-should-use=https://github.com/MichaelAquilina/zsh-you-should-use"
+    "spend-cloud=https://github.com/spend-cloud-tom/zsh-plugin-spend-cloud"
+    "ssh-transfer=https://github.com/dipodidae/zsh-plugin-ssh-transfer"
+    "remote-prepare=https://github.com/dipodidae/zsh-plugin-remote-prepare"
   )
 
   local entry name url
@@ -304,11 +99,6 @@ zsh::install_plugins() {
     url="${entry#*=}"
     zsh::install_plugin "$name" "$url" "$base"
   done
-
-  # Install custom plugins (from local dotfiles or download when remote)
-  zsh::install_spend_cloud_plugin "${base}"
-  zsh::install_ssh_transfer_plugin "${base}"
-  zsh::install_remote_prepare_plugin "${base}"
 }
 
 #######################################
@@ -378,7 +168,7 @@ zsh::apply_file() {
       warn "Failed to establish $name symlink"
       return 1
     fi
-    
+
     if fs::ensure_symlink "$src" "$dest"; then
       success "symlink $name"
       return 0
@@ -388,7 +178,7 @@ zsh::apply_file() {
       return 1
     fi
   fi
-  
+
   warn "Unknown mode '$mode' for $name"
   return 1
 }

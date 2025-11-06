@@ -34,7 +34,7 @@ fs::backup() {
 fs::ensure_symlink() {
   local src="$1" dest="$2"
   core::run mkdir -p "$(dirname "${dest}")"
-  
+
   # If destination is already a symlink pointing to the correct source, done
   if [[ -L "${dest}" ]]; then
     local current_target
@@ -56,7 +56,7 @@ fs::ensure_symlink() {
       rm -f "${dest}"
     fi
   fi
-  
+
   if [[ "${DRY_RUN}" == "1" ]]; then
     note "(dry-run) ln -s ${src} ${dest}"
     return 0
