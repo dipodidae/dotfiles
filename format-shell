@@ -8,8 +8,6 @@ if [[ -f "scripts/format-shell.sh" ]]; then
   exec "scripts/format-shell.sh" "$@"
 elif [[ -f "${HOME}/.dotfiles/scripts/format-shell.sh" ]]; then
   exec "${HOME}/.dotfiles/scripts/format-shell.sh" "$@"
-elif [[ -f "/home/tom/projects/dotfiles/scripts/format-shell.sh" ]]; then
-  exec "/home/tom/projects/dotfiles/scripts/format-shell.sh" "$@"
 else
   echo "Error: Cannot find format-shell.sh script" >&2
   echo "Please run from dotfiles directory or check installation" >&2

@@ -109,12 +109,20 @@ pkg::ensure_group() {
 #######################################
 pkg::ensure_apt_repo() {
   local name="$1" key_url="$2" repo_line="$3"
+  local repo_added=0
   core::sudo mkdir -p /etc/apt/keyrings
   if [[ ! -f "/etc/apt/keyrings/${name}.gpg" ]]; then
     core::run bash -c "curl -fsSL '${key_url}' | sudo gpg --dearmor -o /etc/apt/keyrings/${name}.gpg"
+    repo_added=1
   fi
   if [[ ! -f "/etc/apt/sources.list.d/${name}.list" ]]; then
     core::run bash -c "echo '${repo_line}' | sudo tee /etc/apt/sources.list.d/${name}.list >/dev/null"
+    repo_added=1
+  fi
+  # Reset the guard so we always refresh after adding a new repo entry,
+  # ensuring the newly-added repo is visible to subsequent installs.
+  if ((repo_added)); then
+    _PKG_APT_UPDATED=0
   fi
   pkg::apt_update_once
 }

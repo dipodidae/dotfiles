@@ -40,7 +40,9 @@ zsh::install_pure_prompt() {
     step "Pure Prompt"
   fi
   if core::git_clone_or_update "https://github.com/sindresorhus/pure.git" "${dir}"; then
-    [[ -d "${dir}" ]] && success "Pure prompt"
+    if [[ -d "${dir}" ]]; then
+      success "Pure prompt"
+    fi
   else
     warn "Pure prompt skipped"
   fi

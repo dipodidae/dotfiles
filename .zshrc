@@ -139,6 +139,7 @@ _zshrc_prepend_path "${HOME}/.local/bin"
 
 alias nio="ni --prefer-offline"
 alias s="nr start"
+alias d="nr dev"
 alias b="nr build"
 alias bw="nr build --watch"
 alias t="nr test"
@@ -251,40 +252,40 @@ pr() {
 # DIRECTORY NAVIGATION
 # ────────────────────────────────────────────────────────────────────────────────
 
-# Navigate to subdirectory in ~/development
+# Navigate to ~/development or a subdirectory within it
 development() {
-  [[ -n "${1:-}" ]] || {
-    echo 'usage: development <dir>' >&2
-    return 2
-  }
-  cd "${HOME}/development/${1}" || return 1
+  if [[ -n "${1:-}" ]]; then
+    cd "${HOME}/development/${1}" || return 1
+  else
+    cd "${HOME}/development" || return 1
+  fi
 }
 
-# Navigate to subdirectory in ~/repros
+# Navigate to ~/repros or a subdirectory within it
 repros() {
-  [[ -n "${1:-}" ]] || {
-    echo 'usage: repros <dir>' >&2
-    return 2
-  }
-  cd "${HOME}/repros/${1}" || return 1
+  if [[ -n "${1:-}" ]]; then
+    cd "${HOME}/repros/${1}" || return 1
+  else
+    cd "${HOME}/repros" || return 1
+  fi
 }
 
-# Navigate to subdirectory in ~/forks
+# Navigate to ~/forks or a subdirectory within it
 forks() {
-  [[ -n "${1:-}" ]] || {
-    echo 'usage: forks <dir>' >&2
-    return 2
-  }
-  cd "${HOME}/forks/${1}" || return 1
+  if [[ -n "${1:-}" ]]; then
+    cd "${HOME}/forks/${1}" || return 1
+  else
+    cd "${HOME}/forks" || return 1
+  fi
 }
 
-# Navigate to subdirectory in ~/projects
+# Navigate to ~/projects or a subdirectory within it
 projects() {
-  [[ -n "${1:-}" ]] || {
-    echo 'usage: projects <dir>' >&2
-    return 2
-  }
-  cd "${HOME}/projects/${1}" || return 1
+  if [[ -n "${1:-}" ]]; then
+    cd "${HOME}/projects/${1}" || return 1
+  else
+    cd "${HOME}/projects" || return 1
+  fi
 }
 
 # Create directory and cd into it
@@ -382,3 +383,11 @@ if [[ -x /usr/bin/keychain ]]; then
   [[ -f /home/tom/.keychain/machine-sh ]] && source /home/tom/.keychain/machine-sh
 fi
 ## </SPEND_CLOUD_KEYCHAIN>
+
+# ────────────────────────────────────────────────────────────────────────────────
+# LOCAL OVERRIDES
+# ────────────────────────────────────────────────────────────────────────────────
+
+# Source local customisations that should not be committed (machine-specific
+# settings, extra aliases, secrets, etc.).  Create ~/.zshrc.local to use this.
+_zshrc_source_if_exists "${HOME}/.zshrc.local"

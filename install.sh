@@ -45,6 +45,7 @@ done
 [[ -f "${LOG_FILE}" ]] || : > "${LOG_FILE}"
 
 _fail_line=""
+_fail_lineno=""
 #######################################
 # cleanup
 # Trap handler that reports failure context and surfaces backup/log info.
@@ -52,6 +53,7 @@ _fail_line=""
 #   BACKUP_DIR
 #   LOG_FILE
 #   _fail_line (modified)
+#   _fail_lineno (modified)
 # Arguments: none
 # Returns:
 #   Exits with original shell status
@@ -59,7 +61,7 @@ _fail_line=""
 cleanup() {
   local rc=$?
   if ((rc != 0)); then
-    error "Aborted (exit ${rc}) at ${BASH_SOURCE[0]}:${LINENO} ${_fail_line}"
+    error "Aborted (exit ${rc}) at ${BASH_SOURCE[0]}:${_fail_lineno} ${_fail_line}"
     error "See log: ${LOG_FILE}"
     if [[ -d ${BACKUP_DIR} ]]; then
       info "Backups: ${BACKUP_DIR}"
@@ -68,7 +70,7 @@ cleanup() {
   exit "${rc}"
 }
 trap cleanup EXIT
-trap '_fail_line="(last cmd: $BASH_COMMAND)"' DEBUG
+trap '_fail_line="(last cmd: $BASH_COMMAND)"; _fail_lineno="${LINENO}"' DEBUG
 
 DRY_RUN="0"
 SKIP_PACKAGES="0"
