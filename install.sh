@@ -6,7 +6,7 @@ IFS=$'\n\t'
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly LOG_FILE="${HOME}/.dotfiles-install.log"
 readonly BACKUP_DIR="${HOME}/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
-readonly NVM_VERSION="v0.40.3"
+readonly DOTFILES_NVM_VERSION="v0.40.3"
 readonly DOTFILES_RAW="https://raw.githubusercontent.com/dipodidae/dotfiles/main"
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
@@ -42,7 +42,7 @@ for module in "${MODULES[@]}"; do
   . "${module_path}"
 done
 
-[[ -f "${LOG_FILE}" ]] || : > "${LOG_FILE}"
+[[ -f "${LOG_FILE}" ]] || : >"${LOG_FILE}"
 
 _fail_line=""
 _fail_lineno=""
@@ -77,28 +77,28 @@ SKIP_PACKAGES="0"
 SKIP_PYTHON="0"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --dry-run)
-      DRY_RUN="1"
-      ;;
-    --skip-packages)
-      SKIP_PACKAGES="1"
-      ;;
-    --skip-python)
-      SKIP_PYTHON="1"
-      ;;
-    -h | --help)
-      cat << EOF
+  --dry-run)
+    DRY_RUN="1"
+    ;;
+  --skip-packages)
+    SKIP_PACKAGES="1"
+    ;;
+  --skip-python)
+    SKIP_PYTHON="1"
+    ;;
+  -h | --help)
+    cat <<EOF
 Dotfiles / Dev Environment Installer (modular edition)
 Usage: $0 [--dry-run] [--skip-packages] [--help]
     --dry-run        Show actions only
     --skip-packages  Skip system package manager steps
     --skip-python    Skip pyenv/Python installation
 EOF
-      exit 0
-      ;;
-    *)
-      die "Unknown option: $1"
-      ;;
+    exit 0
+    ;;
+  *)
+    die "Unknown option: $1"
+    ;;
   esac
   shift
 

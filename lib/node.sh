@@ -26,7 +26,7 @@ node::load_nvm() {
 # node::ensure_nvm_installed
 # Install NVM if not present, then load it.
 # Globals:
-#   NVM_VERSION
+#   DOTFILES_NVM_VERSION
 #   NVM_DIR (exported)
 # Outputs:
 #   Step/success/warn messages
@@ -36,8 +36,8 @@ node::ensure_nvm_installed() {
   if [[ -d "${NVM_DIR}" ]]; then
     note "NVM already present"
   else
-    step "Installing NVM ${NVM_VERSION}"
-    core::run bash -c "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh | bash"
+    step "Installing NVM ${DOTFILES_NVM_VERSION}"
+    core::run bash -c "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/${DOTFILES_NVM_VERSION}/install.sh | bash"
   fi
   node::load_nvm
   if ! core::have nvm; then
@@ -47,24 +47,35 @@ node::ensure_nvm_installed() {
 
 #######################################
 # node::_nvm_cmd
-# Execute an nvm subcommand with nounset disabled.
+# Execute an nvm subcommand in the current shell with nounset disabled.
+# Must run in the current shell (not a subshell) so that PATH changes
+# from "nvm install/use" are visible to subsequent commands.
 # Arguments:
 #   NVM subcommand and args
 # Returns:
 #   Exit status of nvm command
 #######################################
 node::_nvm_cmd() {
-  core::without_nounset nvm "$@"
+  set +u
+  nvm "$@"
+  local rc=$?
+  set -u
+  return $rc
 }
 
 #######################################
 # node::_nvm_use_lts
 # Activate Node LTS version without noisy output.
+# Must run in the current shell so the updated PATH persists.
 # Returns:
 #   Exit status of nvm use
 #######################################
 node::_nvm_use_lts() {
-  core::without_nounset nvm use --lts > /dev/null
+  set +u
+  nvm use --lts >/dev/null
+  local rc=$?
+  set -u
+  return $rc
 }
 
 #######################################
@@ -94,7 +105,7 @@ node::get_current_version() {
   fi
 
   local version=""
-  version="$(node --version 2> /dev/null || true)"
+  version="$(node --version 2>/dev/null || true)"
   version="${version#v}"
   printf '%s\n' "${version}"
 }
@@ -106,7 +117,7 @@ node::get_current_version() {
 #######################################
 node::get_lts_version() {
   local version=""
-  version="$(core::without_nounset nvm version-remote --lts 2> /dev/null || true)"
+  version="$(core::without_nounset nvm version-remote --lts 2>/dev/null || true)"
   printf '%s\n' "${version#v}"
 }
 
