@@ -161,8 +161,10 @@ node::ensure_lts_active() {
   if [[ -z "${current}" ]]; then
     if node::install_lts_retry; then
       core::run node::_nvm_use_lts || true
+      success "Node $(node::get_current_version)"
+    else
+      warn "Node LTS install failed"
     fi
-    success "Node $(node::get_current_version)"
     return 0
   fi
 
@@ -213,9 +215,9 @@ node::install_global_tools() {
     warn "Node missing—skip JS tooling"
     return
   fi
-  node::ensure_npm_global "@antfu/ni"
-  node::ensure_npm_global "pnpm@latest"
-  node::ensure_npm_global "diff-so-fancy"
+  node::ensure_npm_global "@antfu/ni" || true
+  node::ensure_npm_global "pnpm@latest" || true
+  node::ensure_npm_global "diff-so-fancy" || true
 }
 
 #######################################

@@ -202,7 +202,7 @@ dev_tools::ensure_glow() {
       fi
       ;;
     arch | macos)
-      pkg::install glow
+      pkg::install glow || warn "glow skipped"
       ;;
     redhat)
       pkg::install glow || warn "glow skipped"
@@ -247,10 +247,10 @@ dev_tools::ensure_gh_cli() {
       pkg::install gh || warn "Install gh manually: https://cli.github.com"
       ;;
     arch)
-      pkg::install github-cli
+      pkg::install github-cli || warn "Install gh manually: https://cli.github.com"
       ;;
     macos)
-      pkg::install gh
+      pkg::install gh || warn "Install gh manually: https://cli.github.com"
       ;;
     *)
       warn "Install gh manually"

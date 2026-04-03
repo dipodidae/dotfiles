@@ -2,7 +2,7 @@
 # Secret key management using age encryption.
 # shellcheck shell=bash
 
-readonly SECRETS_DIR="${SCRIPT_DIR}/secrets"
+[[ -v SECRETS_DIR ]] || readonly SECRETS_DIR="${SCRIPT_DIR}/secrets"
 
 #######################################
 # secrets::install_age

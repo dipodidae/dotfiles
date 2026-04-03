@@ -189,13 +189,15 @@ zsh::apply_dotfiles() {
   headline "Dotfiles (.zshrc + help)"
 
   if [[ -f "${SCRIPT_DIR}/.zshrc" ]]; then
-    zsh::apply_file ".zshrc" "${SCRIPT_DIR}/.zshrc" "${HOME}/.zshrc" symlink
+    zsh::apply_file ".zshrc" "${SCRIPT_DIR}/.zshrc" "${HOME}/.zshrc" symlink ||
+      warn ".zshrc symlink failed"
   else
     warn "Local .zshrc not found"
   fi
 
   if [[ -f "${SCRIPT_DIR}/.zshrc.help.md" ]]; then
-    zsh::apply_file "help" "${SCRIPT_DIR}/.zshrc.help.md" "${HOME}/.zshrc.help.md" symlink
+    zsh::apply_file "help" "${SCRIPT_DIR}/.zshrc.help.md" \
+      "${HOME}/.zshrc.help.md" symlink || true
   fi
 }
 
