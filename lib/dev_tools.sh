@@ -60,7 +60,7 @@ dev_tools::ensure_debian_bat_symlink() {
     if core::have bat; then
       success "bat available"
     else
-      fs::append_once "${HOME}/.zshrc" 'alias bat=batcat'
+      fs::append_once "${HOME}/.zshrc" 'alias bat=batcat' || true
       warn "bat symlink not yet in PATH for current session; alias added"
     fi
   else
