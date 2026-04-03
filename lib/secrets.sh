@@ -144,14 +144,13 @@ secrets::has_encrypted_files() {
 #   0 on success, 1 if no TTY
 #######################################
 secrets::prompt_passphrase() {
-  if [[ ! -t 0 ]]; then
-    # stdin is not a terminal (shouldn't happen after bootstrap, but guard)
+  if [[ ! -e /dev/tty ]]; then
     warn "No TTY available for passphrase prompt"
     return 1
   fi
   local passphrase
   printf "%b?%b Enter secrets passphrase: " "${C_CYAN}" "${C_RESET}" >&2
-  read -rs passphrase
+  read -rs passphrase < /dev/tty
   printf "\n" >&2
   echo "${passphrase}"
 }
