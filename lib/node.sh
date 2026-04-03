@@ -14,11 +14,31 @@ node::load_nvm() {
   if [[ -z "${NVM_DIR:-}" ]]; then
     return 0
   fi
+  node::_clean_npmrc
   if [[ -s "${NVM_DIR}/nvm.sh" ]]; then
     set +u
     # shellcheck disable=SC1091
     . "${NVM_DIR}/nvm.sh"
     set -u
+  fi
+}
+
+#######################################
+# Remove globalconfig and prefix from user .npmrc.
+# These settings are incompatible with NVM.
+# Globals:
+#   HOME
+# Outputs:
+#   Warn message if entries were removed.
+#######################################
+node::_clean_npmrc() {
+  local npmrc="${HOME}/.npmrc"
+  if [[ ! -f "${npmrc}" ]]; then
+    return 0
+  fi
+  if grep -qE '^\s*(globalconfig|prefix)\s*=' "${npmrc}"; then
+    warn "Removing globalconfig/prefix from .npmrc (incompatible with nvm)"
+    sed -i.bak '/^\s*\(globalconfig\|prefix\)\s*=/d' "${npmrc}"
   fi
 }
 
