@@ -115,8 +115,11 @@ pkg::ensure_apt_repo() {
     core::run bash -c "curl -fsSL '${key_url}' | sudo gpg --dearmor -o /etc/apt/keyrings/${name}.gpg"
     repo_added=1
   fi
-  if [[ ! -f "/etc/apt/sources.list.d/${name}.list" ]]; then
-    core::run bash -c "echo '${repo_line}' | sudo tee /etc/apt/sources.list.d/${name}.list > /dev/null"
+  local list_file="/etc/apt/sources.list.d/${name}.list"
+  if [[ ! -f "${list_file}" ]] ||
+    [[ "$(cat "${list_file}" 2> /dev/null)" != "${repo_line}" ]]; then
+    core::run bash -c \
+      "echo '${repo_line}' | sudo tee '${list_file}' > /dev/null"
     repo_added=1
   fi
   # Reset the guard so we always refresh after adding a new repo entry,
