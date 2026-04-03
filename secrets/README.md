@@ -1,7 +1,7 @@
 # Encrypted Secrets
 
-This directory contains age-encrypted secret files (SSH keys, GPG keys, etc.)
-that are decrypted during installation with a passphrase prompt.
+This directory contains an age-encrypted archive of secret files (SSH keys, configs, etc.)
+that are decrypted during installation with a single passphrase prompt.
 
 ## Prerequisites
 
@@ -9,34 +9,36 @@ that are decrypted during installation with a passphrase prompt.
 
 ## How it works
 
-1. Secret files are encrypted with `age -p` (passphrase-based encryption)
-2. The `manifest.txt` file maps encrypted files to their destinations
-3. During `install.sh`, you're prompted for the passphrase to decrypt them
+1. `make-secrets.sh` bundles all secret files into a tar archive, encrypts it with `age -p`, and stores it as `secrets.tar.gz.age`
+2. `manifest.txt` maps file destinations and permissions (used for both packing and extracting)
+3. During `install.sh`, you're prompted once for the passphrase to decrypt and extract everything
 
-## Adding a new secret
+## Adding or updating a secret
 
-### 1. Encrypt the file
+### 1. Add it to the manifest
+
+Edit `secrets/manifest.txt`:
+
+```
+# format: name.age:~/destination/path:permissions
+my_key.age:~/.ssh/my_key:600
+```
+
+The `name.age` field is only used as a label — all files are bundled into one archive.
+
+### 2. Re-encrypt the bundle
 
 ```bash
-age -p -o secrets/ssh_id_ed25519.age ~/.ssh/id_ed25519
+./make-secrets.sh
 ```
 
-You'll be prompted to enter (and confirm) a passphrase.
+This collects all files listed in the manifest from their destinations, bundles them into a tar, encrypts it with age, and writes `secrets/secrets.tar.gz.age`.
 
-### 2. Add it to the manifest
-
-Edit `secrets/manifest.txt` and add a line:
-
-```
-# format: encrypted_filename:destination_path:permissions
-ssh_id_ed25519.age:~/.ssh/id_ed25519:600
-```
-
-### 3. Commit the encrypted file
+### 3. Commit
 
 ```bash
-git add secrets/ssh_id_ed25519.age secrets/manifest.txt
-git commit -m "feat: add encrypted SSH key"
+git add secrets/secrets.tar.gz.age secrets/manifest.txt
+git commit -m "chore: update encrypted secrets bundle"
 ```
 
 ## Manifest format
@@ -44,19 +46,9 @@ git commit -m "feat: add encrypted SSH key"
 Each line in `manifest.txt` follows the format:
 
 ```
-filename.age:~/destination/path:permissions
+label:~/destination/path:permissions
 ```
 
 - Lines starting with `#` are comments
 - Blank lines are ignored
 - `~` is expanded to `$HOME`
-
-## Re-encrypting after key rotation
-
-If you rotate a key, just re-encrypt the new version with the same passphrase:
-
-```bash
-age -p -o secrets/ssh_id_ed25519.age ~/.ssh/id_ed25519
-```
-
-Use the same passphrase across all files so you only need to enter it once during install.

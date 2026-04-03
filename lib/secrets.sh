@@ -4,6 +4,8 @@
 
 [[ -v SECRETS_DIR ]] || readonly SECRETS_DIR="${SCRIPT_DIR}/secrets"
 
+readonly SECRETS_BUNDLE="${SECRETS_DIR}/secrets.tar.gz.age"
+
 #######################################
 # secrets::install_age
 # Install age encryption tool via package manager or binary download.
@@ -20,25 +22,7 @@ secrets::install_age() {
 
   step "Installing age"
   case "${OS_TYPE}" in
-    debian)
-      if pkg::install age; then
-        success "age installed"
-        return 0
-      fi
-      ;;
-    arch)
-      if pkg::install age; then
-        success "age installed"
-        return 0
-      fi
-      ;;
-    macos)
-      if pkg::install age; then
-        success "age installed"
-        return 0
-      fi
-      ;;
-    redhat)
+    debian | arch | macos | redhat)
       if pkg::install age; then
         success "age installed"
         return 0
@@ -97,7 +81,8 @@ secrets::install_age_fallback() {
   }
 
   tar_gz="age-v${age_version}-${os_name}-${age_arch}.tar.gz"
-  url="https://github.com/FiloSottile/age/releases/download/v${age_version}/${tar_gz}"
+  url="https://github.com/FiloSottile/age/releases/download"
+  url="${url}/v${age_version}/${tar_gz}"
   step "Downloading age ${age_version} (fallback)"
 
   if ! core::run curl -fsSL "${url}" -o "${tmpd}/${tar_gz}"; then
@@ -126,13 +111,13 @@ secrets::install_age_fallback() {
 }
 
 #######################################
-# secrets::has_encrypted_files
-# Check if there are any encrypted secret files to process.
+# secrets::has_bundle
+# Check if the encrypted secrets bundle exists.
 # Returns:
-#   0 if encrypted files exist, 1 otherwise
+#   0 if bundle exists, 1 otherwise
 #######################################
-secrets::has_encrypted_files() {
-  compgen -G "${SECRETS_DIR}/*.age" > /dev/null 2>&1
+secrets::has_bundle() {
+  [[ -f "${SECRETS_BUNDLE}" ]]
 }
 
 #######################################
@@ -150,120 +135,78 @@ secrets::prompt_passphrase() {
   fi
 
   if core::have gum; then
-    gum input --password --placeholder "Enter secrets passphrase" \
+    gum input --password \
+      --placeholder "Enter secrets passphrase" \
       --prompt "🔑 " --prompt.foreground 212 < /dev/tty
     return $?
   fi
 
   local passphrase
-  printf "%b?%b Enter secrets passphrase: " "${C_CYAN}" "${C_RESET}" >&2
+  printf "%b?%b Enter secrets passphrase: " \
+    "${C_CYAN}" "${C_RESET}" >&2
   read -rs passphrase < /dev/tty
   printf "\n" >&2
   echo "${passphrase}"
 }
 
 #######################################
-# secrets::decrypt_file
-# Decrypt a single .age file to its target location.
-# Arguments:
-#   1 - encrypted file path (e.g., secrets/ssh_id_ed25519.age)
-#   2 - destination path (e.g., ~/.ssh/id_ed25519)
-#   3 - file permissions (e.g., 600)
-# Environment:
-#   AGE_PASSPHRASE - the decryption passphrase (piped to age via stdin)
-# Returns:
-#   0 on success, 1 on failure
+# secrets::apply_permissions
+# Set file permissions from the manifest after extraction.
+# Globals:
+#   SECRETS_DIR
+#   HOME
 #######################################
-secrets::decrypt_file() {
-  local src="$1" dest="$2" perms="$3"
+secrets::apply_permissions() {
+  local manifest="${SECRETS_DIR}/manifest.txt"
+  [[ -f "${manifest}" ]] || return 0
 
-  if [[ "${DRY_RUN}" == "1" ]]; then
-    note "(dry-run) decrypt ${src} → ${dest}"
-    return 0
-  fi
-
-  mkdir -p "$(dirname "${dest}")"
-
-  if printf '%s' "${AGE_PASSPHRASE}" | age -d -o "${dest}.tmp" "${src}" 2> /dev/null; then
-    mv "${dest}.tmp" "${dest}"
-    chmod "${perms}" "${dest}"
-    return 0
-  fi
-
-  rm -f "${dest}.tmp"
-  return 1
+  local encrypted dest perms
+  while IFS=: read -r encrypted dest perms; do
+    [[ -z "${encrypted}" || "${encrypted}" == \#* ]] && continue
+    dest="${dest/#\~/${HOME}}"
+    if [[ -f "${dest}" && -n "${perms}" ]]; then
+      chmod "${perms}" "${dest}"
+    fi
+  done < "${manifest}"
 }
 
 #######################################
-# secrets::decrypt_all
-# Decrypt all secrets from the manifest file.
-# The manifest (secrets/manifest.txt) maps encrypted files to destinations:
-#   ssh_id_ed25519.age:~/.ssh/id_ed25519:600
-#   ssh_id_ed25519.pub.age:~/.ssh/id_ed25519.pub:644
-#   gpg_private.age:~/.gnupg/private-key.asc:600
+# secrets::decrypt_bundle
+# Decrypt and extract the secrets archive.
 # Globals:
-#   SECRETS_DIR
+#   SECRETS_BUNDLE
+#   HOME
 # Returns:
-#   0 if all succeeded, 1 if any failed
+#   0 on success, 1 on failure
 #######################################
-secrets::decrypt_all() {
-  local manifest="${SECRETS_DIR}/manifest.txt"
-  if [[ ! -f "${manifest}" ]]; then
-    warn "No secrets manifest found at ${manifest}"
-    return 1
+secrets::decrypt_bundle() {
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    note "(dry-run) decrypt ${SECRETS_BUNDLE} → \$HOME"
+    return 0
   fi
 
   local passphrase
   passphrase="$(secrets::prompt_passphrase)" || return 1
-  export AGE_PASSPHRASE="${passphrase}"
 
-  local line src dest perms encrypted_file failed=0
-  while IFS=: read -r src dest perms; do
-    # Skip comments and blank lines
-    [[ -z "${src}" || "${src}" == \#* ]] && continue
+  local tmptar
+  tmptar="$(mktemp)"
 
-    # Expand ~ to HOME
-    dest="${dest/#\~/${HOME}}"
-    encrypted_file="${SECRETS_DIR}/${src}"
-
-    if [[ ! -f "${encrypted_file}" ]]; then
-      warn "Encrypted file missing: ${encrypted_file}"
-      failed=1
-      continue
-    fi
-
-    step "Decrypting ${src}"
-    fs::backup "${dest}"
-    if secrets::decrypt_file "${encrypted_file}" "${dest}" "${perms}"; then
-      success "${src} → ${dest}"
-    else
-      error "Failed to decrypt ${src} (wrong passphrase?)"
-      failed=1
-    fi
-  done < "${manifest}"
-
-  unset AGE_PASSPHRASE
-  return "${failed}"
-}
-
-#######################################
-# secrets::encrypt_file
-# Encrypt a file with age passphrase encryption.
-# Arguments:
-#   1 - source file path
-#   2 - output .age file path
-# Outputs:
-#   Prompts for passphrase via age
-# Returns:
-#   0 on success, 1 on failure
-#######################################
-secrets::encrypt_file() {
-  local src="$1" dest="$2"
-  if [[ ! -f "${src}" ]]; then
-    error "Source file not found: ${src}"
+  if ! printf '%s' "${passphrase}" |
+    age -d -o "${tmptar}" "${SECRETS_BUNDLE}" 2> /dev/null; then
+    rm -f "${tmptar}"
+    error "Decryption failed (wrong passphrase?)"
     return 1
   fi
-  age -p -o "${dest}" "${src}"
+
+  if ! tar -xzf "${tmptar}" -C "${HOME}"; then
+    rm -f "${tmptar}"
+    error "Archive extraction failed"
+    return 1
+  fi
+
+  rm -f "${tmptar}"
+  secrets::apply_permissions
+  return 0
 }
 
 #######################################
@@ -276,13 +219,12 @@ secrets::setup() {
   headline "Secrets"
   secrets::install_age
 
-  if ! secrets::has_encrypted_files; then
-    note "No encrypted secrets found — skipping"
-    note "To add secrets, see: ${SECRETS_DIR}/README.md"
+  if ! secrets::has_bundle; then
+    note "No secrets bundle found — skipping"
     return 0
   fi
 
-  info "Encrypted secrets detected in ${SECRETS_DIR}"
+  info "Encrypted secrets bundle detected"
 
   if core::have gum && [[ -e /dev/tty ]]; then
     if ! gum confirm "Decrypt secrets now?" < /dev/tty; then
@@ -292,9 +234,9 @@ secrets::setup() {
   fi
 
   step "Decrypting secrets"
-  if secrets::decrypt_all; then
-    success "All secrets decrypted"
+  if secrets::decrypt_bundle; then
+    success "Secrets decrypted and installed"
   else
-    warn "Some secrets failed to decrypt — you can re-run the installer later"
+    warn "Decrypt failed — re-run the installer later"
   fi
 }
