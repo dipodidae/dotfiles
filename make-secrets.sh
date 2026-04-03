@@ -70,7 +70,7 @@ main() {
   # Create tar archive with paths relative to $HOME.
   local tmptar
   tmptar="$(mktemp)"
-  trap 'rm -f "${tmptar}"' EXIT
+  trap 'rm -f "${tmptar:-}"' EXIT
 
   tar -czf "${tmptar}" -C "${HOME}" \
     "${files[@]/#${HOME}\//}"
