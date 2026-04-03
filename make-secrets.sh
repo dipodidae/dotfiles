@@ -88,6 +88,10 @@ main() {
         --placeholder "Confirm passphrase" \
         --prompt "🔑 " --prompt.foreground 212
     )"
+    if [[ -z "${passphrase}" ]]; then
+      gum style --foreground 196 -- "  ✖ Passphrase cannot be empty"
+      exit 1
+    fi
     if [[ "${passphrase}" != "${confirm}" ]]; then
       gum style --foreground 196 -- "  ✖ Passphrases do not match"
       exit 1

@@ -99,18 +99,13 @@ dev_tools::ensure_fzf_stack() {
 }
 
 #######################################
-# dev_tools::get_glow_arch
-# Detect glow architecture name for download.
-# Outputs: arch string (amd64/arm64) or empty on unsupported
+# dev_tools::ensure_charm_repo
+# Configure the Charm APT repository for Debian.
 #######################################
-dev_tools::get_glow_arch() {
-  local arch
-  arch="$(uname -m)"
-  case "${arch}" in
-    x86_64 | amd64) echo "amd64" ;;
-    aarch64 | arm64) echo "arm64" ;;
-    *) return 1 ;;
-  esac
+dev_tools::ensure_charm_repo() {
+  pkg::ensure_apt_repo "charm" \
+    "https://repo.charm.sh/apt/gpg.key" \
+    "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *"
 }
 
 #######################################
@@ -142,7 +137,7 @@ dev_tools::install_binary() {
 dev_tools::install_glow_fallback() {
   local glow_version="1.5.1" glow_arch tmpd tar url
 
-  if ! glow_arch="$(dev_tools::get_glow_arch)"; then
+  if ! glow_arch="$(core::get_arch)"; then
     warn "Unsupported arch for glow fallback ($(uname -m))"
     return 1
   fi
@@ -191,9 +186,7 @@ dev_tools::ensure_glow() {
   fi
   case "${OS_TYPE}" in
     debian)
-      pkg::ensure_apt_repo "charm" \
-        "https://repo.charm.sh/apt/gpg.key" \
-        "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *"
+      dev_tools::ensure_charm_repo
       if pkg::install glow; then
         success "glow installed"
       else
@@ -281,9 +274,7 @@ dev_tools::ensure_gum() {
   step "Installing gum"
   case "${OS_TYPE}" in
     debian)
-      pkg::ensure_apt_repo "charm" \
-        "https://repo.charm.sh/apt/gpg.key" \
-        "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *"
+      dev_tools::ensure_charm_repo
       pkg::install gum || {
         warn "gum install failed; continuing with basic output"
         return 1

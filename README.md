@@ -24,6 +24,7 @@ cd ~/clones/dotfiles
 ./install.sh --dry-run         # Preview without making changes
 ./install.sh --skip-packages   # Skip system package installs
 ./install.sh --skip-python     # Skip pyenv/Python setup
+./install.sh --skip-secrets    # Skip secrets decryption
 ```
 
 ## What Gets Installed

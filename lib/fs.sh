@@ -61,7 +61,10 @@ fs::ensure_symlink() {
     note "(dry-run) ln -s ${src} ${dest}"
     return 0
   fi
-  ln -s "${src}" "${dest}"
+  if ! ln -s "${src}" "${dest}"; then
+    error "Failed to create symlink ${src} → ${dest}"
+    return 1
+  fi
 }
 
 #######################################

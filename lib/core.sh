@@ -144,6 +144,22 @@ core::spin() {
 }
 
 #######################################
+# core::get_arch
+# Detect CPU architecture for binary downloads.
+# Outputs:
+#   amd64 or arm64
+# Returns:
+#   1 on unsupported architecture
+#######################################
+core::get_arch() {
+  case "$(uname -m)" in
+    x86_64 | amd64) echo "amd64" ;;
+    aarch64 | arm64) echo "arm64" ;;
+    *) return 1 ;;
+  esac
+}
+
+#######################################
 # core::git_clone_or_update
 # Clone repo if missing, or pull if already present.
 # Arguments:

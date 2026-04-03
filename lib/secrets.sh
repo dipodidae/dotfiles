@@ -34,21 +34,7 @@ secrets::install_age() {
   secrets::install_age_fallback
 }
 
-#######################################
-# secrets::get_age_arch
-# Detect architecture name for age binary download.
-# Outputs:
-#   arch string (amd64/arm64) or returns 1
-#######################################
-secrets::get_age_arch() {
-  local arch
-  arch="$(uname -m)"
-  case "${arch}" in
-    x86_64 | amd64) echo "amd64" ;;
-    aarch64 | arm64) echo "arm64" ;;
-    *) return 1 ;;
-  esac
-}
+# core::get_arch — REMOVED, use core::get_arch
 
 #######################################
 # secrets::install_age_fallback
@@ -61,7 +47,7 @@ secrets::get_age_arch() {
 secrets::install_age_fallback() {
   local age_version="1.2.0" age_arch tmpd tar_gz url os_name
 
-  if ! age_arch="$(secrets::get_age_arch)"; then
+  if ! age_arch="$(core::get_arch)"; then
     warn "Unsupported arch for age fallback ($(uname -m))"
     return 1
   fi
@@ -217,6 +203,12 @@ secrets::decrypt_bundle() {
 #######################################
 secrets::setup() {
   headline "Secrets"
+
+  if [[ "${SKIP_SECRETS:-0}" == "1" ]]; then
+    note "Skipping secrets (--skip-secrets)"
+    return 0
+  fi
+
   secrets::install_age
 
   if ! secrets::has_bundle; then
@@ -226,7 +218,12 @@ secrets::setup() {
 
   info "Encrypted secrets bundle detected"
 
-  if core::have gum && [[ -e /dev/tty ]]; then
+  if [[ ! -e /dev/tty ]]; then
+    note "No TTY — skipping secrets (re-run interactively)"
+    return 0
+  fi
+
+  if core::have gum; then
     if ! gum confirm "Decrypt secrets now?" < /dev/tty; then
       note "Skipped — re-run the installer later to decrypt"
       return 0

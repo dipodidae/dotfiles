@@ -155,18 +155,15 @@ python::ensure_latest() {
     fi
   fi
 
-  local -i install_rc=0
+  local install_ok=0
   if [[ -n "${makeflags}" ]]; then
-    if ! core::run env MAKEFLAGS="${makeflags}" pyenv install -s "${latest}"; then
-      install_rc=$?
-    fi
+    core::run env MAKEFLAGS="${makeflags}" \
+      pyenv install -s "${latest}" && install_ok=1
   else
-    if ! core::run pyenv install -s "${latest}"; then
-      install_rc=$?
-    fi
+    core::run pyenv install -s "${latest}" && install_ok=1
   fi
 
-  if ((install_rc == 0)) && core::run pyenv global "${latest}"; then
+  if ((install_ok)) && core::run pyenv global "${latest}"; then
     success "Python ${latest} active"
   else
     warn "Failed to build Python ${latest}"

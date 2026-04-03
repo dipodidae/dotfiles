@@ -125,6 +125,7 @@ trap '_fail_line="(last cmd: $BASH_COMMAND)"; _fail_lineno="${LINENO}"' DEBUG
 DRY_RUN="0"
 SKIP_PACKAGES="0"
 SKIP_PYTHON="0"
+SKIP_SECRETS="0"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run)
@@ -136,13 +137,17 @@ while [[ $# -gt 0 ]]; do
     --skip-python)
       SKIP_PYTHON="1"
       ;;
+    --skip-secrets)
+      SKIP_SECRETS="1"
+      ;;
     -h | --help)
       cat << EOF
 Dotfiles / Dev Environment Installer (modular edition)
-Usage: $0 [--dry-run] [--skip-packages] [--help]
+Usage: $0 [--dry-run] [--skip-packages] [--skip-secrets] [--help]
     --dry-run        Show actions only
     --skip-packages  Skip system package manager steps
     --skip-python    Skip pyenv/Python installation
+    --skip-secrets   Skip secrets decryption
 EOF
       exit 0
       ;;
@@ -154,7 +159,7 @@ EOF
 
 done
 
-readonly DRY_RUN SKIP_PACKAGES SKIP_PYTHON
+readonly DRY_RUN SKIP_PACKAGES SKIP_PYTHON SKIP_SECRETS
 
 if [[ "${DRY_RUN}" == "1" ]]; then
   note "(dry-run mode) No changes will be made."

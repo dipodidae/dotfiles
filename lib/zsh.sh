@@ -223,6 +223,10 @@ zsh::ensure_default_shell() {
     warn "zsh not found"
     return 0
   fi
+  if [[ ! -e /dev/tty ]]; then
+    warn "No TTY — run manually: chsh -s ${zsh_path}"
+    return 0
+  fi
   step "Setting default shell to zsh"
   if core::run chsh -s "${zsh_path}" "${USER}" < /dev/tty; then
     success "Shell changed"
