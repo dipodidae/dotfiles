@@ -220,7 +220,7 @@ dev_tools::ensure_glow() {
 dev_tools::setup_gh_debian_repo() {
   pkg::ensure_apt_repo "github-cli" \
     "https://cli.github.com/packages/githubcli-archive-keyring.gpg" \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main"
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/github-cli.gpg] https://cli.github.com/packages stable main"
 }
 
 #######################################
