@@ -146,9 +146,12 @@ dev_tools::install_glow_fallback() {
     warn "Failed to create temp dir for glow fallback"
     return 1
   }
+  # shellcheck disable=SC2064
+  trap "rm -rf '${tmpd}'" RETURN
 
   tar="glow_${glow_version}_linux_${glow_arch}.tar.gz"
-  url="https://github.com/charmbracelet/glow/releases/download/v${glow_version}/${tar}"
+  url="https://github.com/charmbracelet/glow/releases/download"
+  url="${url}/v${glow_version}/${tar}"
   step "Downloading glow fallback ${glow_version}"
 
   if ! core::run curl -fsSL "${url}" -o "${tmpd}/${tar}"; then

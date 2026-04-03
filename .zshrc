@@ -375,14 +375,19 @@ zstyle ':completion:*:approximate:*' max-errors 1 numeric
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
 
-## <SPEND_CLOUD_KEYCHAIN>
-## Written on 06-11-2025 at 09:45:17
-
+# SSH keychain — auto-load private keys that have a matching .pub file.
 if [[ -x /usr/bin/keychain ]]; then
-  /usr/bin/keychain /home/tom/.ssh/id_rsa /home/tom/.ssh/spend-cloud-tom /home/tom/.ssh/dipodidae
-  [[ -f /home/tom/.keychain/machine-sh ]] && source /home/tom/.keychain/machine-sh
+  local -a _ssh_keys=()
+  for _pub in "${HOME}"/.ssh/*.pub(N); do
+    _priv="${_pub%.pub}"
+    [[ -f "${_priv}" ]] && _ssh_keys+=("${_priv}")
+  done
+  if (( ${#_ssh_keys[@]} )); then
+    /usr/bin/keychain "${_ssh_keys[@]}"
+  fi
+  _zshrc_source_if_exists "${HOME}/.keychain/$(hostname)-sh"
+  unset _pub _priv _ssh_keys
 fi
-## </SPEND_CLOUD_KEYCHAIN>
 
 # ────────────────────────────────────────────────────────────────────────────────
 # LOCAL OVERRIDES

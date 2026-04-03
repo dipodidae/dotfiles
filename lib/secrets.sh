@@ -65,6 +65,8 @@ secrets::install_age_fallback() {
     warn "Failed to create temp dir for age"
     return 1
   }
+  # shellcheck disable=SC2064
+  trap "rm -rf '${tmpd}'" RETURN
 
   tar_gz="age-v${age_version}-${os_name}-${age_arch}.tar.gz"
   url="https://github.com/FiloSottile/age/releases/download"
@@ -73,19 +75,16 @@ secrets::install_age_fallback() {
 
   if ! core::run curl -fsSL "${url}" -o "${tmpd}/${tar_gz}"; then
     warn "age download failed"
-    rm -rf "${tmpd}"
     return 1
   fi
 
   if ! core::run tar -xzf "${tmpd}/${tar_gz}" -C "${tmpd}"; then
     warn "age extraction failed"
-    rm -rf "${tmpd}"
     return 1
   fi
 
   dev_tools::install_binary "${tmpd}/age/age" age
   dev_tools::install_binary "${tmpd}/age/age-keygen" age-keygen
-  rm -rf "${tmpd}"
 
   if core::have age; then
     success "age (fallback)"

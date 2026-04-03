@@ -57,7 +57,10 @@ node::ensure_nvm_installed() {
     note "NVM already present"
   else
     step "Installing NVM ${DOTFILES_NVM_VERSION}"
-    core::run bash -c "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/${DOTFILES_NVM_VERSION}/install.sh | bash"
+    if ! core::run bash -c \
+      "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/${DOTFILES_NVM_VERSION}/install.sh | bash"; then
+      warn "NVM install script failed"
+    fi
   fi
   node::load_nvm
   if ! core::have nvm; then
