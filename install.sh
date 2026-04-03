@@ -3,11 +3,61 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly DOTFILES_REPO="https://github.com/dipodidae/dotfiles.git"
+readonly DOTFILES_CLONE_DIR="${HOME}/clones/dotfiles"
+
+#######################################
+# bootstrap
+# When running from a curl pipe (no local repo), install minimal prereqs,
+# clone the repo, and re-exec the cloned installer.
+# This ensures every install runs from a local clone with symlinks.
+#######################################
+bootstrap() {
+  printf '\033[1m%s\033[0m\n' "Bootstrapping dotfiles installer..."
+
+  # Install git if missing (need it to clone)
+  if ! command -v git > /dev/null 2>&1; then
+    printf '▶ Installing git...\n'
+    if command -v apt-get > /dev/null 2>&1; then
+      sudo apt-get update -y && sudo apt-get install -y git
+    elif command -v dnf > /dev/null 2>&1; then
+      sudo dnf install -y git
+    elif command -v yum > /dev/null 2>&1; then
+      sudo yum install -y git
+    elif command -v pacman > /dev/null 2>&1; then
+      sudo pacman -S --noconfirm git
+    elif command -v brew > /dev/null 2>&1; then
+      brew install git
+    else
+      printf 'ERROR: Cannot install git automatically. Install git and re-run.\n' >&2
+      exit 1
+    fi
+  fi
+
+  # Clone or update the dotfiles repo
+  mkdir -p "$(dirname "${DOTFILES_CLONE_DIR}")"
+  if [[ -d "${DOTFILES_CLONE_DIR}/.git" ]]; then
+    printf '▶ Updating existing dotfiles clone...\n'
+    git -C "${DOTFILES_CLONE_DIR}" pull -q || true
+  else
+    printf '▶ Cloning dotfiles to %s...\n' "${DOTFILES_CLONE_DIR}"
+    git clone "${DOTFILES_REPO}" "${DOTFILES_CLONE_DIR}"
+  fi
+
+  printf '▶ Handing off to cloned installer...\n\n'
+  exec "${DOTFILES_CLONE_DIR}/install.sh" "$@"
+}
+
+# Detect if running from curl pipe or outside the repo — bootstrap if so
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
+if [[ -z "${SCRIPT_DIR}" || ! -d "${SCRIPT_DIR}/.git" ]]; then
+  bootstrap "$@"
+fi
+
+readonly SCRIPT_DIR
 readonly LOG_FILE="${HOME}/.dotfiles-install.log"
 readonly BACKUP_DIR="${HOME}/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
 readonly DOTFILES_NVM_VERSION="v0.40.3"
-readonly DOTFILES_RAW="https://raw.githubusercontent.com/dipodidae/dotfiles/main"
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   readonly C_RESET='\033[0m'
@@ -31,7 +81,7 @@ else
   readonly C_BOLD=""
 fi
 
-readonly MODULES=(logging core fs pkg python node dev_tools zsh system)
+readonly MODULES=(logging core fs pkg python node dev_tools zsh secrets system)
 for module in "${MODULES[@]}"; do
   module_path="${SCRIPT_DIR}/lib/${module}.sh"
   if [[ ! -f "${module_path}" ]]; then
@@ -125,6 +175,7 @@ main() {
   python::setup
   zsh::apply_dotfiles
   dev_tools::setup
+  secrets::setup
   zsh::ensure_default_shell
   system::self_test
   system::summary

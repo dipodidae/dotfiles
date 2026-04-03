@@ -88,34 +88,6 @@ core::require_internet() {
 }
 
 #######################################
-# core::is_remote_install
-# Returns 0 when installer is running from remote (no .git directory).
-# Globals:
-#   SCRIPT_DIR
-#######################################
-core::is_remote_install() {
-  [[ ! -d "${SCRIPT_DIR}/.git" ]]
-}
-
-#######################################
-# core::download
-# Download file from repository raw path with retry support.
-# Globals:
-#   DOTFILES_RAW, DRY_RUN
-#######################################
-core::download() {
-  local relative_path="$1" dest="$2"
-  local src
-
-  if [[ "${relative_path}" =~ ^https?:// ]]; then
-    src="${relative_path}"
-  else
-    src="${DOTFILES_RAW}/${relative_path}"
-  fi
-  core::retry_cmd 3 curl -fsSL "${src}" -o "${dest}"
-}
-
-#######################################
 # core::retry_cmd
 # Retry a command with exponential backoff.
 # Arguments:

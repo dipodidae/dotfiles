@@ -140,12 +140,12 @@ zsh::ensure_workspace_dirs() {
 
 #######################################
 # zsh::apply_file
-# Apply a dotfile via download or symlink.
+# Apply a dotfile via symlink to the cloned repo.
 # Arguments:
 #   1 - display name
 #   2 - source path
 #   3 - destination path
-#   4 - mode (download or symlink)
+#   4 - mode (symlink)
 # Outputs:
 #   Success/warn messages
 # Returns:
@@ -156,16 +156,7 @@ zsh::apply_file() {
 
   fs::backup "$dest"
 
-  if [[ "$mode" == "download" ]]; then
-    if core::download "$src" "${dest}.tmp" && mv "${dest}.tmp" "$dest"; then
-      success "$name applied"
-      return 0
-    else
-      warn "Failed to apply $name"
-      return 1
-    fi
-  elif [[ "$mode" == "symlink" ]]; then
-    # Pre-flight check: ensure source exists
+  if [[ "$mode" == "symlink" ]]; then
     if [[ ! -e "$src" ]]; then
       error "Source missing for $name: $src"
       warn "Failed to establish $name symlink"
@@ -188,7 +179,7 @@ zsh::apply_file() {
 
 #######################################
 # zsh::apply_dotfiles
-# Apply .zshrc and help file (remote or local).
+# Apply .zshrc and help file via symlinks to the cloned repo.
 # Globals:
 #   SCRIPT_DIR
 # Outputs:
@@ -196,15 +187,6 @@ zsh::apply_file() {
 #######################################
 zsh::apply_dotfiles() {
   headline "Dotfiles (.zshrc + help)"
-
-  if core::is_remote_install; then
-    step "Fetch remote .zshrc"
-    zsh::apply_file ".zshrc" ".zshrc" "${HOME}/.zshrc" download
-
-    step "Fetch remote help"
-    zsh::apply_file "help" ".zshrc.help.md" "${HOME}/.zshrc.help.md" download
-    return
-  fi
 
   if [[ -f "${SCRIPT_DIR}/.zshrc" ]]; then
     zsh::apply_file ".zshrc" "${SCRIPT_DIR}/.zshrc" "${HOME}/.zshrc" symlink

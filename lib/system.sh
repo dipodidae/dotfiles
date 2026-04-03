@@ -45,7 +45,7 @@ system::install_base() {
 system::self_test() {
   headline "Self-Test"
   local failed=0 binary
-  for binary in zsh git curl; do
+  for binary in zsh git curl age; do
     if ! core::have "${binary}"; then
       failed=1
       warn "${binary} missing"
@@ -85,7 +85,7 @@ system::check_tool() {
 # Globals:
 #   BACKUP_DIR
 #   LOG_FILE
-#   DOTFILES_RAW
+#   SCRIPT_DIR
 #   C_* (color codes)
 # Outputs:
 #   Summary report to stdout
@@ -94,7 +94,7 @@ system::summary() {
   headline "Summary"
   printf "%bInstalled targets%b\n" "${C_BOLD}" "${C_RESET}"
 
-  local -a tools=(zsh git curl wget gh nvm node ni pnpm fzf fd bat tree diff-so-fancy pyenv glow)
+  local -a tools=(zsh git curl wget gh nvm node ni pnpm fzf fd bat tree diff-so-fancy pyenv glow age)
   local tool
   for tool in "${tools[@]}"; do
     system::check_tool "${tool}"
@@ -103,8 +103,7 @@ system::summary() {
     note "Backups in ${BACKUP_DIR}"
   fi
   printf "\nNext: restart shell or run: %bexec zsh%b\n" "${C_CYAN}" "${C_RESET}"
-  if core::is_remote_install; then
-    printf "Re-run later: curl -fsSL %s/install.sh | bash\n" "${DOTFILES_RAW}"
-  fi
+  printf "Dotfiles repo: %b%s%b\n" "${C_CYAN}" "${SCRIPT_DIR}" "${C_RESET}"
+  printf "Re-run later:  %bcd %s && ./install.sh%b\n" "${C_DIM}" "${SCRIPT_DIR}" "${C_RESET}"
   info "Log: ${LOG_FILE}"
 }
