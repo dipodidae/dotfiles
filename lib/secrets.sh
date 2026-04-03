@@ -178,7 +178,7 @@ secrets::decrypt_file() {
 
   mkdir -p "$(dirname "${dest}")"
 
-  if printf '%s' "${AGE_PASSPHRASE}" | age -d -o "${dest}.tmp" "${src}" 2>/dev/null; then
+  if printf '%s' "${AGE_PASSPHRASE}" | age -d -o "${dest}.tmp" "${src}" 2> /dev/null; then
     mv "${dest}.tmp" "${dest}"
     chmod "${perms}" "${dest}"
     return 0

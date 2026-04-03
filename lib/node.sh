@@ -72,7 +72,7 @@ node::_nvm_cmd() {
 #######################################
 node::_nvm_use_lts() {
   set +u
-  nvm use --lts >/dev/null
+  nvm use --lts > /dev/null
   local rc=$?
   set -u
   return $rc
@@ -105,7 +105,7 @@ node::get_current_version() {
   fi
 
   local version=""
-  version="$(node --version 2>/dev/null || true)"
+  version="$(node --version 2> /dev/null || true)"
   version="${version#v}"
   printf '%s\n' "${version}"
 }
@@ -117,7 +117,7 @@ node::get_current_version() {
 #######################################
 node::get_lts_version() {
   local version=""
-  version="$(core::without_nounset nvm version-remote --lts 2>/dev/null || true)"
+  version="$(core::without_nounset nvm version-remote --lts 2> /dev/null || true)"
   printf '%s\n' "${version#v}"
 }
 

@@ -49,7 +49,7 @@ bootstrap() {
 }
 
 # Detect if running from curl pipe or outside the repo — bootstrap if so
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || echo "")"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2> /dev/null && pwd || echo "")"
 if [[ -z "${SCRIPT_DIR}" || ! -d "${SCRIPT_DIR}/.git" ]]; then
   bootstrap "$@"
 fi
@@ -92,7 +92,7 @@ for module in "${MODULES[@]}"; do
   . "${module_path}"
 done
 
-[[ -f "${LOG_FILE}" ]] || : >"${LOG_FILE}"
+[[ -f "${LOG_FILE}" ]] || : > "${LOG_FILE}"
 
 _fail_line=""
 _fail_lineno=""
@@ -127,28 +127,28 @@ SKIP_PACKAGES="0"
 SKIP_PYTHON="0"
 while [[ $# -gt 0 ]]; do
   case "$1" in
-  --dry-run)
-    DRY_RUN="1"
-    ;;
-  --skip-packages)
-    SKIP_PACKAGES="1"
-    ;;
-  --skip-python)
-    SKIP_PYTHON="1"
-    ;;
-  -h | --help)
-    cat <<EOF
+    --dry-run)
+      DRY_RUN="1"
+      ;;
+    --skip-packages)
+      SKIP_PACKAGES="1"
+      ;;
+    --skip-python)
+      SKIP_PYTHON="1"
+      ;;
+    -h | --help)
+      cat << EOF
 Dotfiles / Dev Environment Installer (modular edition)
 Usage: $0 [--dry-run] [--skip-packages] [--help]
     --dry-run        Show actions only
     --skip-packages  Skip system package manager steps
     --skip-python    Skip pyenv/Python installation
 EOF
-    exit 0
-    ;;
-  *)
-    die "Unknown option: $1"
-    ;;
+      exit 0
+      ;;
+    *)
+      die "Unknown option: $1"
+      ;;
   esac
   shift
 

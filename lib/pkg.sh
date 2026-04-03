@@ -116,7 +116,7 @@ pkg::ensure_apt_repo() {
     repo_added=1
   fi
   if [[ ! -f "/etc/apt/sources.list.d/${name}.list" ]]; then
-    core::run bash -c "echo '${repo_line}' | sudo tee /etc/apt/sources.list.d/${name}.list >/dev/null"
+    core::run bash -c "echo '${repo_line}' | sudo tee /etc/apt/sources.list.d/${name}.list > /dev/null"
     repo_added=1
   fi
   # Reset the guard so we always refresh after adding a new repo entry,

@@ -1,118 +1,106 @@
-<div align="center">
+# Dotfiles
 
-# dotfiles
-
-Zsh shell + modern tooling, bootstrapped in one go.
-
-![Shell Lint](https://github.com/dipodidae/dotfiles/actions/workflows/shellcheck.yml/badge.svg)
-
-</div>
-
----
+Modular dotfiles installer and Zsh configuration for dev environments. One command provisions your tools, shell, and secrets on a fresh machine.
 
 ## Quick Start
 
-Copy-paste this and you’re done:
+Bootstrap a new machine from scratch:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh | bash
 ```
 
----
-
-## Development & Linting
-
-This repo follows **one canonical linting pipeline** (defined in `.github/workflows/shellcheck.yml`).
-
-### Local Development
+Or run locally after cloning:
 
 ```bash
-# Run complete lint suite (matches CI)
-make lint              # or: ./scripts/lint-shell.sh
-
-# Auto-format all shell files
-make format            # or: ./scripts/format-shell.sh
-
-# Check formatting only
-make format-check      # or: ./scripts/format-shell.sh --check
+git clone https://github.com/dipodidae/dotfiles.git ~/clones/dotfiles
+cd ~/clones/dotfiles
+./install.sh
 ```
 
-### Pre-commit Hooks (Optional)
+### Options
+
+```
+./install.sh --dry-run         # Preview without making changes
+./install.sh --skip-packages   # Skip system package installs
+./install.sh --skip-python     # Skip pyenv/Python setup
+```
+
+## What Gets Installed
+
+| Category | Tools |
+|----------|-------|
+| **Shell** | Zsh, Oh My Zsh, Pure prompt, 8 plugins |
+| **Node.js** | NVM, Node LTS, pnpm, ni, diff-so-fancy |
+| **Python** | pyenv, latest stable Python |
+| **Utilities** | fzf, bat, fd, tree, glow, GitHub CLI |
+| **Secrets** | age (passphrase-based encryption) |
+
+## Supported Platforms
+
+- Debian / Ubuntu (apt)
+- Red Hat / Fedora (dnf/yum)
+- Arch Linux (pacman)
+- macOS (Homebrew)
+
+## Architecture
+
+The installer sources modular libraries from `lib/` in a defined order, then runs each setup step sequentially:
+
+```
+install.sh
+  ├── lib/logging.sh     # Colored, timestamped output
+  ├── lib/core.sh        # OS detection, dry-run, retry logic
+  ├── lib/fs.sh          # Backups, symlinks, directory helpers
+  ├── lib/pkg.sh         # Cross-platform package management
+  ├── lib/python.sh      # pyenv + Python build
+  ├── lib/node.sh        # NVM + Node.js + npm globals
+  ├── lib/dev_tools.sh   # fzf, bat, fd, glow, gh
+  ├── lib/zsh.sh         # Oh My Zsh, Pure prompt, plugins
+  ├── lib/secrets.sh     # age encrypt/decrypt
+  └── lib/system.sh      # Base packages, self-test, summary
+```
+
+Each module exposes namespaced functions (e.g. `pkg::install`, `node::setup`) and has no side effects when sourced. All state-changing operations go through `core::run` to support `--dry-run` mode.
+
+## Shell Configuration
+
+The `.zshrc` provides a curated set of aliases and functions:
+
+- **Git** — 40+ aliases (`gs`, `ga`, `gc`, `gp`, `grb`, `gl`, `pr`, etc.)
+- **Node.js** — shortcuts via ni (`s`=start, `d`=dev, `b`=build, `t`=test)
+- **Navigation** — `development`, `repros`, `forks`, `projects` directory helpers
+- **Clone helpers** — `clone`, `cloned`, `cloner`, `clonef` (clone + cd + open editor)
+- **Help** — run `help` for a built-in reference rendered with glow
+
+Extend locally with `~/.zshrc.local` (not tracked).
+
+## Secrets Management
+
+Secrets are encrypted with [age](https://github.com/FiloSottile/age) using passphrase-based encryption and stored safely in the repo.
+
+`secrets/manifest.txt` maps encrypted files to their destinations:
+
+```
+ssh_key.age:~/.ssh/id_ed25519:600
+ssh_config.age:~/.ssh/config:644
+```
+
+**Encrypt** new secrets:
 
 ```bash
-pre-commit install     # Auto-lint on commit
-pre-commit run --all-files
+./make-secrets.sh
 ```
 
-The `pre-commit` hook invokes `scripts/lint-shell.sh`, so local commits and CI stay perfectly aligned.
+**Decrypt** happens automatically during install, prompting for the passphrase.
 
-### What Gets Checked
-
-1. **shellcheck (bash)** — all tracked `.sh` / `.bash` files
-2. **zsh -n syntax validation** — catches real parse errors in `.zsh` configs
-3. **shfmt** — formatting (`-i 2 -ci -sr`)
-4. **audit** — Google Shell Style Guide heuristics (headers, main(), oversized files)
-
-Local = CI = consistent.
-
-Re-run the installer anytime — it updates safely and never overwrites your local overrides.
-
----
-
-## What You Get
-
-* ⚡ **Fast Zsh**: Oh My Zsh + Pure prompt, sub-second load
-* 🧩 Plugins: autosuggestions, syntax highlighting, `z`, you-should-use
-* 🛠 Git helpers: aliases, PR workflow, diff-so-fancy
-* 📦 Node ready: NVM (LTS), pnpm, `ni`/`nr` for universal scripts
-* 🐍 Python via pyenv (best effort)
-* 🔎 fzf everywhere (with fd / bat / tree when present)
-* 📖 In-terminal docs with `glow` (falls back to `cat`)
-* 🔒 Safe installer: backs up your old dotfiles automatically
-
----
-
-## Built-in Help
-
-Type `help` in your shell:
-
-* Renders with `glow` if available
-* Falls back to plain text
-
----
-
-## Cheat Sheet
+## Development
 
 ```bash
-# Packages / scripts
-s / b / t / w / c    # start, build, test, watch, typecheck
-lint / lintf         # lint & auto-fix
-
-# Git
-gs / gcm / gp        # status / commit / push
-gd / gdc             # diff (working / staged)
-glp 15               # last 15 commits
-pr ls / pr 123       # list PRs / checkout PR
-
-# Navigation
-development proj     # cd ~/development/proj
-dir newthing         # mkdir + cd
-
-# Clone
-cloned user/repo     # clone to ~/development + open in VSCode
+make lint            # shellcheck + shfmt + zsh -n + style audit (matches CI)
+make format          # Auto-format all shell files
+make format-check    # Check formatting without modifying
 ```
 
----
-
-## Customizing
-
-Put your own tweaks in `~/.zshrc.local`.
-Re-run the installer whenever — your local changes stay untouched.
-
----
-
-👉 TL;DR:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dipodidae/dotfiles/main/install.sh | bash
-```
+> [!NOTE]
+> The canonical lint pipeline is `./scripts/lint-shell.sh` — CI runs exactly this script.

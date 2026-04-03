@@ -13,7 +13,7 @@ if [[ ! -f "${MANIFEST}" ]]; then
   exit 1
 fi
 
-if ! command -v age &>/dev/null; then
+if ! command -v age &> /dev/null; then
   echo "ERROR: age is not installed (https://github.com/FiloSottile/age)" >&2
   exit 1
 fi
@@ -32,7 +32,7 @@ while IFS=: read -r encrypted dest _perms; do
   entries+=("${encrypted}:${dest}")
 done < "${MANIFEST}"
 
-if (( ${#entries[@]} == 0 )); then
+if ((${#entries[@]} == 0)); then
   echo "Nothing to encrypt — no source files found." >&2
   exit 1
 fi
@@ -51,7 +51,7 @@ for entry in "${entries[@]}"; do
   echo "--- ${src} → ${encrypted}"
   if age -p -o "${out}" "${src}"; then
     echo "  OK"
-    (( count++ )) || true
+    ((count++)) || true
   else
     echo "  FAILED" >&2
     failed=1
