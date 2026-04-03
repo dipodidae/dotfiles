@@ -16,7 +16,7 @@ pkg::apt_update_once() {
   if [[ "${_PKG_APT_UPDATED}" == "1" ]]; then
     return 0
   fi
-  core::sudo apt-get update -y
+  core::spin "Updating package lists…" sudo apt-get update -y
   _PKG_APT_UPDATED=1
 }
 
@@ -50,7 +50,8 @@ pkg::install() {
   case "${OS_TYPE}" in
     debian)
       pkg::apt_update_once
-      core::sudo apt-get install -y "${pkgs[@]}"
+      core::spin "Installing ${pkgs[*]}…" \
+        sudo apt-get install -y "${pkgs[@]}"
       ;;
     redhat)
       if core::have dnf; then

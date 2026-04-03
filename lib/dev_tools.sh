@@ -265,6 +265,54 @@ dev_tools::ensure_gh_cli() {
 }
 
 #######################################
+# dev_tools::ensure_gum
+# Install gum TUI tool and upgrade logging to use it.
+# Globals:
+#   OS_TYPE
+# Outputs:
+#   Step/success/warn messages
+#######################################
+dev_tools::ensure_gum() {
+  if core::have gum; then
+    logging::upgrade_to_gum
+    return 0
+  fi
+
+  step "Installing gum"
+  case "${OS_TYPE}" in
+    debian)
+      pkg::ensure_apt_repo "charm" \
+        "https://repo.charm.sh/apt/gpg.key" \
+        "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *"
+      pkg::install gum || {
+        warn "gum install failed; continuing with basic output"
+        return 1
+      }
+      ;;
+    arch | macos)
+      pkg::install gum || {
+        warn "gum skipped"
+        return 1
+      }
+      ;;
+    redhat)
+      pkg::install gum || {
+        warn "gum skipped"
+        return 1
+      }
+      ;;
+    *)
+      warn "Install gum manually for enhanced output"
+      return 1
+      ;;
+  esac
+
+  if logging::upgrade_to_gum; then
+    success "gum activated"
+  fi
+}
+
+#######################################
 # dev_tools::setup
 # Main orchestrator for developer utilities.
 # Outputs:
@@ -272,6 +320,7 @@ dev_tools::ensure_gh_cli() {
 #######################################
 dev_tools::setup() {
   headline "Developer Utilities"
+  dev_tools::ensure_gum
   dev_tools::ensure_gh_cli
   dev_tools::ensure_fzf_stack
   dev_tools::ensure_glow

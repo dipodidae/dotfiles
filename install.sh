@@ -170,6 +170,18 @@ main() {
   headline "Initialize"
   core::require_internet
   system::install_base
+  dev_tools::ensure_gum
+
+  if core::have gum; then
+    printf "\n"
+    gum style --bold --foreground 212 --border double \
+      --border-foreground 99 --align center --padding "1 4" \
+      --margin "0 2" \
+      "  dotfiles  " \
+      "" \
+      "github.com/dipodidae/dotfiles"
+    printf "\n"
+  fi
   zsh::setup
   node::setup
   python::setup
@@ -179,7 +191,16 @@ main() {
   zsh::ensure_default_shell
   system::self_test
   system::summary
-  success "Installation complete"
+
+  if core::have gum; then
+    printf "\n"
+    gum style --bold --foreground 78 --border rounded \
+      --border-foreground 78 --align center --padding "0 3" \
+      "✔ Installation complete"
+    printf "\n"
+  else
+    success "Installation complete"
+  fi
 }
 
 main "$@"

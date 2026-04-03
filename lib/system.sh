@@ -92,18 +92,49 @@ system::check_tool() {
 #######################################
 system::summary() {
   headline "Summary"
-  printf "%bInstalled targets%b\n" "${C_BOLD}" "${C_RESET}"
 
-  local -a tools=(zsh git curl wget gh nvm node ni pnpm fzf fd bat tree diff-so-fancy pyenv glow age)
+  local -a tools=(
+    zsh git curl wget gh nvm node ni pnpm
+    fzf fd bat tree diff-so-fancy pyenv glow gum age
+  )
   local tool
-  for tool in "${tools[@]}"; do
-    system::check_tool "${tool}"
-  done
+
+  if core::have gum; then
+    local lines=""
+    for tool in "${tools[@]}"; do
+      if core::have "${tool}"; then
+        lines+="  ✔ ${tool}\n"
+      else
+        lines+="  ✖ ${tool}\n"
+      fi
+    done
+    printf "%b" "${lines}" | gum style --border rounded \
+      --border-foreground 212 --padding "0 1" \
+      --bold --foreground 255
+  else
+    printf "%bInstalled targets%b\n" "${C_BOLD}" "${C_RESET}"
+    for tool in "${tools[@]}"; do
+      system::check_tool "${tool}"
+    done
+  fi
+
   if [[ -d "${BACKUP_DIR}" ]]; then
     note "Backups in ${BACKUP_DIR}"
   fi
-  printf "\nNext: restart shell or run: %bexec zsh%b\n" "${C_CYAN}" "${C_RESET}"
-  printf "Dotfiles repo: %b%s%b\n" "${C_CYAN}" "${SCRIPT_DIR}" "${C_RESET}"
-  printf "Re-run later:  %bcd %s && ./install.sh%b\n" "${C_DIM}" "${SCRIPT_DIR}" "${C_RESET}"
+
+  if core::have gum; then
+    printf "\n"
+    gum style --foreground 78 \
+      "Next: restart shell or run: exec zsh" \
+      "Dotfiles repo: ${SCRIPT_DIR}" \
+      "Re-run later:  cd ${SCRIPT_DIR} && ./install.sh"
+  else
+    printf "\nNext: restart shell or run: %bexec zsh%b\n" \
+      "${C_CYAN}" "${C_RESET}"
+    printf "Dotfiles repo: %b%s%b\n" \
+      "${C_CYAN}" "${SCRIPT_DIR}" "${C_RESET}"
+    printf "Re-run later:  %bcd %s && ./install.sh%b\n" \
+      "${C_DIM}" "${SCRIPT_DIR}" "${C_RESET}"
+  fi
   info "Log: ${LOG_FILE}"
 }

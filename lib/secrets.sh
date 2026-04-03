@@ -148,6 +148,13 @@ secrets::prompt_passphrase() {
     warn "No TTY available for passphrase prompt"
     return 1
   fi
+
+  if core::have gum; then
+    gum input --password --placeholder "Enter secrets passphrase" \
+      --prompt "🔑 " --prompt.foreground 212 < /dev/tty
+    return $?
+  fi
+
   local passphrase
   printf "%b?%b Enter secrets passphrase: " "${C_CYAN}" "${C_RESET}" >&2
   read -rs passphrase < /dev/tty
@@ -276,6 +283,14 @@ secrets::setup() {
   fi
 
   info "Encrypted secrets detected in ${SECRETS_DIR}"
+
+  if core::have gum; then
+    if ! gum confirm "Decrypt secrets now?"; then
+      note "Skipped — re-run the installer later to decrypt"
+      return 0
+    fi
+  fi
+
   step "Decrypting secrets"
   if secrets::decrypt_all; then
     success "All secrets decrypted"

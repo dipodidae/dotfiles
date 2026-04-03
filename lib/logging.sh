@@ -129,3 +129,57 @@ die() {
   error "$1"
   exit 1
 }
+
+#######################################
+# logging::upgrade_to_gum
+# Redefine logging functions to use gum for styled output.
+# Falls back silently if gum is not available.
+# Returns:
+#   0 if gum is available, 1 otherwise
+#######################################
+# shellcheck disable=SC2317
+logging::upgrade_to_gum() {
+  command -v gum > /dev/null 2>&1 || return 1
+
+  note() {
+    gum log --level info --prefix "•" -- "$*"
+    _log "NOTE: $*"
+  }
+
+  info() {
+    gum log --level info --prefix "ℹ" -- "$*"
+    _log "INFO: $*"
+  }
+
+  step() {
+    gum log --level info --prefix "▶" \
+      --prefix.foreground 39 -- "$*"
+    _log "STEP: $*"
+  }
+
+  success() {
+    gum log --level info --prefix "✔" \
+      --prefix.foreground 78 -- "$*"
+    _log "OK: $*"
+  }
+
+  warn() {
+    gum log --level warn -- "$*" >&2
+    _log "WARN: $*"
+  }
+
+  error() {
+    gum log --level error -- "$*" >&2
+    _log "ERR: $*"
+  }
+
+  headline() {
+    local msg="$1"
+    printf "\n"
+    gum style --bold --foreground 212 --border double \
+      --border-foreground 212 --padding "0 2" -- "${msg}"
+    _log "HEAD: $msg"
+  }
+
+  return 0
+}

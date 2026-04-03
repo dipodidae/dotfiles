@@ -118,6 +118,32 @@ core::retry_cmd() {
 }
 
 #######################################
+# core::spin
+# Run a command with a gum spinner, or plain if gum is absent.
+# Globals:
+#   DRY_RUN
+# Arguments:
+#   1 - spinner title
+#   2+ - command and args
+# Returns:
+#   Exit status of command
+#######################################
+core::spin() {
+  local title="$1"
+  shift
+  if [[ "${DRY_RUN}" == "1" ]]; then
+    note "(dry-run) $*"
+    return 0
+  fi
+  if command -v gum > /dev/null 2>&1; then
+    gum spin --spinner dot --title "${title}" \
+      --spinner.foreground 212 -- "$@"
+  else
+    "$@"
+  fi
+}
+
+#######################################
 # core::git_clone_or_update
 # Clone repo if missing, or pull if already present.
 # Arguments:
