@@ -224,7 +224,7 @@ zsh::ensure_default_shell() {
     return 0
   fi
   step "Setting default shell to zsh"
-  if core::run chsh -s "${zsh_path}" "${USER}"; then
+  if core::run chsh -s "${zsh_path}" "${USER}" < /dev/tty; then
     success "Shell changed"
   else
     warn "chsh failed (manual: chsh -s ${zsh_path})"

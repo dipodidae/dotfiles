@@ -142,34 +142,32 @@ logging::upgrade_to_gum() {
   command -v gum > /dev/null 2>&1 || return 1
 
   note() {
-    gum log --level info --prefix "•" -- "$*"
+    gum style --faint -- "  • $*"
     _log "NOTE: $*"
   }
 
   info() {
-    gum log --level info --prefix "ℹ" -- "$*"
+    gum style --foreground 39 -- "  ℹ $*"
     _log "INFO: $*"
   }
 
   step() {
-    gum log --level info --prefix "▶" \
-      --prefix.foreground 39 -- "$*"
+    gum style --foreground 39 --bold -- "  ▶ $*"
     _log "STEP: $*"
   }
 
   success() {
-    gum log --level info --prefix "✔" \
-      --prefix.foreground 78 -- "$*"
+    gum style --foreground 78 -- "  ✔ $*"
     _log "OK: $*"
   }
 
   warn() {
-    gum log --level warn -- "$*" >&2
+    gum style --foreground 214 -- "  ! $*" >&2
     _log "WARN: $*"
   }
 
   error() {
-    gum log --level error -- "$*" >&2
+    gum style --foreground 196 -- "  ✖ $*" >&2
     _log "ERR: $*"
   }
 

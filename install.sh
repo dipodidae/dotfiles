@@ -164,24 +164,27 @@ readonly OS_TYPE="$(core::detect_os)"
 if [[ "${OS_TYPE}" == "unknown" ]]; then
   die "Unsupported OS"
 fi
-info "Detected OS: ${OS_TYPE}"
+
+# Install gum first so all output is styled from the start.
+dev_tools::ensure_gum
+
+if core::have gum; then
+  printf "\n"
+  gum style --bold --foreground 212 --border double \
+    --border-foreground 99 --align center --padding "1 4" \
+    --margin "0 2" \
+    "  dotfiles  " \
+    "" \
+    "github.com/dipodidae/dotfiles"
+  printf "\n"
+else
+  info "Detected OS: ${OS_TYPE}"
+fi
 
 main() {
   headline "Initialize"
   core::require_internet
   system::install_base
-  dev_tools::ensure_gum
-
-  if core::have gum; then
-    printf "\n"
-    gum style --bold --foreground 212 --border double \
-      --border-foreground 99 --align center --padding "1 4" \
-      --margin "0 2" \
-      "  dotfiles  " \
-      "" \
-      "github.com/dipodidae/dotfiles"
-    printf "\n"
-  fi
   zsh::setup
   node::setup
   python::setup

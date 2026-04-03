@@ -16,8 +16,27 @@ pkg::apt_update_once() {
   if [[ "${_PKG_APT_UPDATED}" == "1" ]]; then
     return 0
   fi
+  pkg::_cleanup_stale_repos
   core::spin "Updating package lists…" sudo apt-get update -y
   _PKG_APT_UPDATED=1
+}
+
+#######################################
+# pkg::_cleanup_stale_repos
+# Remove APT source list files that reference missing keyrings.
+# This prevents apt-get update from failing on stale third-party
+# repos left behind by previous installs.
+#######################################
+pkg::_cleanup_stale_repos() {
+  local list_file keyring
+  for list_file in /etc/apt/sources.list.d/*.list; do
+    [[ -f "${list_file}" ]] || continue
+    keyring="$(grep -oP 'signed-by=\K[^\]]+' "${list_file}" 2> /dev/null || true)"
+    if [[ -n "${keyring}" && ! -f "${keyring}" ]]; then
+      warn "Removing stale repo $(basename "${list_file}") (missing ${keyring})"
+      core::sudo rm -f "${list_file}"
+    fi
+  done
 }
 
 #######################################
@@ -50,7 +69,12 @@ pkg::install() {
   case "${OS_TYPE}" in
     debian)
       pkg::apt_update_once
-      core::spin "Installing ${pkgs[*]}…" \
+      local spin_label
+      spin_label="$(
+        IFS=' '
+        echo "${pkgs[*]}"
+      )"
+      core::spin "Installing ${spin_label}…" \
         sudo apt-get install -y "${pkgs[@]}"
       ;;
     redhat)
@@ -88,7 +112,12 @@ pkg::ensure_group() {
   shift
   local -a pkgs=("$@")
   [[ ${#pkgs[@]} -gt 0 ]] || return 0
-  step "Installing ${label} (${pkgs[*]})"
+  local display
+  display="$(
+    IFS=' '
+    echo "${pkgs[*]}"
+  )"
+  step "Installing ${label} (${display})"
   if pkg::install "${pkgs[@]}"; then
     success "${label} ready"
   else

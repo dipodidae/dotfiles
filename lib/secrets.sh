@@ -284,8 +284,8 @@ secrets::setup() {
 
   info "Encrypted secrets detected in ${SECRETS_DIR}"
 
-  if core::have gum; then
-    if ! gum confirm "Decrypt secrets now?"; then
+  if core::have gum && [[ -e /dev/tty ]]; then
+    if ! gum confirm "Decrypt secrets now?" < /dev/tty; then
       note "Skipped — re-run the installer later to decrypt"
       return 0
     fi
