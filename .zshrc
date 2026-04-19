@@ -133,6 +133,11 @@ if command -v yarn >/dev/null 2>&1; then
 fi
 _zshrc_prepend_path "${HOME}/.local/bin"
 
+# Ubuntu ships bat as batcat; alias it to the conventional name.
+if ! command -v bat >/dev/null 2>&1 && command -v batcat >/dev/null 2>&1; then
+  alias bat='batcat'
+fi
+
 # ────────────────────────────────────────────────────────────────────────────────
 # NODE.JS WORKFLOW ALIASES
 # ────────────────────────────────────────────────────────────────────────────────

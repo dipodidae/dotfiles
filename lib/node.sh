@@ -57,8 +57,10 @@ node::ensure_nvm_installed() {
     note "NVM already present"
   else
     step "Installing NVM ${DOTFILES_NVM_VERSION}"
+    # PROFILE=/dev/null prevents NVM's installer from appending loader
+    # lines to ~/.bashrc; we source NVM from ~/.zshrc instead.
     if ! core::run bash -c \
-      "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/${DOTFILES_NVM_VERSION}/install.sh | bash"; then
+      "curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/${DOTFILES_NVM_VERSION}/install.sh | PROFILE=/dev/null bash"; then
       warn "NVM install script failed"
     fi
   fi
