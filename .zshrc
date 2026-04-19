@@ -55,7 +55,6 @@ plugins=(
   ssh-transfer
   remote-prepare
   spend-cloud
-  git-user-switch
 )
 
 if [[ -f "${ZSH}/oh-my-zsh.sh" ]]; then
@@ -393,6 +392,26 @@ if [[ -x /usr/bin/keychain ]]; then
   _zshrc_source_if_exists "${HOME}/.keychain/$(hostname)-sh"
   unset _pub _priv _ssh_keys
 fi
+
+# ────────────────────────────────────────────────────────────────────────────────
+# GITHUB ACCOUNT AUTO-SWITCH
+# ────────────────────────────────────────────────────────────────────────────────
+# Identity + SSH key are handled by git's includeIf + core.sshCommand (see
+# ~/.gitconfig). This hook keeps `gh` (issues, PRs, API) in sync with the
+# directory you're in. Fires on `cd`, so there's no per-prompt cost.
+
+_gh_autoswitch() {
+  local target
+  case "${PWD}/" in
+    "${HOME}/code/work/"*)     target="spend-cloud-tom" ;;
+    "${HOME}/code/personal/"*) target="dipodidae" ;;
+    *) return ;;
+  esac
+  gh auth switch -u "${target}" >/dev/null 2>&1
+}
+autoload -Uz add-zsh-hook
+add-zsh-hook chpwd _gh_autoswitch
+_gh_autoswitch
 
 # ────────────────────────────────────────────────────────────────────────────────
 # LOCAL OVERRIDES
