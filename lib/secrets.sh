@@ -217,7 +217,7 @@ secrets::setup() {
 
   info "Encrypted secrets bundle detected"
 
-  if [[ ! -e /dev/tty ]]; then
+  if ! { true < /dev/tty; } 2> /dev/null; then
     note "No TTY — skipping secrets (re-run interactively)"
     return 0
   fi

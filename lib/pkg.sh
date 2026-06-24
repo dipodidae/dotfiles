@@ -99,8 +99,30 @@ pkg::install() {
 }
 
 #######################################
+# pkg::is_installed
+# Report whether a package is already installed (no sudo needed).
+# Globals:
+#   OS_TYPE
+# Arguments:
+#   1 - package name
+# Returns:
+#   0 if installed, non-zero otherwise.
+#######################################
+pkg::is_installed() {
+  local pkg="$1"
+  case "${OS_TYPE}" in
+    debian) dpkg -s "${pkg}" > /dev/null 2>&1 ;;
+    redhat) rpm -q "${pkg}" > /dev/null 2>&1 ;;
+    arch) pacman -Q "${pkg}" > /dev/null 2>&1 ;;
+    macos) brew list --formula "${pkg}" > /dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
+}
+
+#######################################
 # pkg::ensure_group
 # Install a labeled group of packages with user feedback.
+# Packages already present are skipped so re-runs need no sudo.
 # Arguments:
 #   1 - label for the group
 #   2+ - package names
@@ -112,13 +134,24 @@ pkg::ensure_group() {
   shift
   local -a pkgs=("$@")
   [[ ${#pkgs[@]} -gt 0 ]] || return 0
+  local -a missing=()
+  local pkg
+  for pkg in "${pkgs[@]}"; do
+    if ! pkg::is_installed "${pkg}"; then
+      missing+=("${pkg}")
+    fi
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    success "${label} ready"
+    return 0
+  fi
   local display
   display="$(
     IFS=' '
-    echo "${pkgs[*]}"
+    echo "${missing[*]}"
   )"
   step "Installing ${label} (${display})"
-  if pkg::install "${pkgs[@]}"; then
+  if pkg::install "${missing[@]}"; then
     success "${label} ready"
   else
     warn "${label} failed"
