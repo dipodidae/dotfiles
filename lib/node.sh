@@ -106,12 +106,22 @@ node::_nvm_use_lts() {
 #######################################
 # node::install_lts_retry
 # Install Node LTS with retry logic.
+# Carries npm globals (pnpm, ni, diff-so-fancy) over from the outgoing
+# version — nvm scopes globals per Node version, so without this they
+# silently vanish whenever Node crosses a major.
 # Returns:
 #   0 on success, 1 on failure after retries
 #######################################
 node::install_lts_retry() {
   step "Installing/Updating Node LTS"
-  if ! core::retry_cmd 3 node::_nvm_cmd install --lts; then
+
+  local -a install_args=(install --lts)
+  # Only meaningful when a version is already installed to copy from.
+  if [[ -n "$(node::get_current_version)" ]]; then
+    install_args+=(--reinstall-packages-from=current)
+  fi
+
+  if ! core::retry_cmd 3 node::_nvm_cmd "${install_args[@]}"; then
     warn "Node LTS install failed after retries"
     return 1
   fi
