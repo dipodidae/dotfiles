@@ -31,7 +31,7 @@ cd ~/clones/dotfiles
 
 | Category | Tools |
 |----------|-------|
-| **Shell** | Zsh, Oh My Zsh, Pure prompt, 8 plugins |
+| **Shell** | Zsh, Oh My Zsh, Pure prompt, 8 plugins; Fish (secondary) |
 | **Node.js** | NVM, Node LTS, pnpm, ni, diff-so-fancy |
 | **Python** | pyenv, latest stable Python |
 | **Utilities** | fzf, bat, fd, tree, glow, GitHub CLI |
@@ -58,6 +58,7 @@ install.sh
   ├── lib/node.sh        # NVM + Node.js + npm globals
   ├── lib/dev_tools.sh   # fzf, bat, fd, glow, gh
   ├── lib/zsh.sh         # Oh My Zsh, Pure prompt, plugins
+  ├── lib/fish.sh        # Fish config symlink + PATH verification
   ├── lib/secrets.sh     # age encrypt/decrypt
   └── lib/system.sh      # Base packages, self-test, summary
 ```
@@ -75,6 +76,14 @@ The `.zshrc` provides a curated set of aliases and functions:
 - **Help** — run `help` for a built-in reference rendered with glow
 
 Extend locally with `~/.zshrc.local` (not tracked).
+
+### Fish
+
+Zsh remains the login shell. Fish is supported as a secondary shell: `fish/config.fish` is symlinked to `~/.config/fish/config.fish` and mirrors the zsh environment (Node/NVM, pnpm, pyenv, PATH) plus the same navigation and git macros, expressed fish-natively as functions and `abbr`s.
+
+Because `nvm` is a bash/zsh shell function that fish cannot source, the fish config resolves nvm's `default` alias to a concrete version and puts that `bin` directory on `PATH` directly — so `node`, `pnpm`, and `ni` resolve in fish. Version *switching* stays a zsh concern; fish follows whatever nvm's default points at.
+
+Extend locally with `~/.config/fish/config.local.fish` (not tracked).
 
 ## Secrets Management
 
@@ -98,8 +107,8 @@ ssh_config.age:~/.ssh/config:644
 ## Development
 
 ```bash
-make lint            # shellcheck + shfmt + zsh -n + style audit (matches CI)
-make format          # Auto-format all shell files
+make lint            # shellcheck + shfmt + zsh -n + fish -n + style audit (matches CI)
+make format          # Auto-format all shell files (shfmt + fish_indent)
 make format-check    # Check formatting without modifying
 ```
 

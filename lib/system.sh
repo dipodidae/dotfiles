@@ -19,19 +19,20 @@ system::install_base() {
   headline "Base Packages"
   case "${OS_TYPE}" in
     debian)
-      pkg::ensure_group "base" zsh git curl wget ca-certificates gnupg lsb-release
+      pkg::ensure_group "base" zsh fish git curl wget ca-certificates gnupg \
+        lsb-release
       ;;
     redhat)
-      pkg::ensure_group "base" zsh git curl wget ca-certificates gnupg
+      pkg::ensure_group "base" zsh fish git curl wget ca-certificates gnupg
       ;;
     arch)
-      pkg::ensure_group "base" zsh git curl wget
+      pkg::ensure_group "base" zsh fish git curl wget
       ;;
     macos)
-      pkg::ensure_group "base" zsh git curl wget
+      pkg::ensure_group "base" zsh fish git curl wget
       ;;
     *)
-      warn "Manual install required: zsh git curl wget"
+      warn "Manual install required: zsh fish git curl wget"
       ;;
   esac
 }
@@ -54,6 +55,11 @@ system::self_test() {
   if [[ ! -f "${HOME}/.zshrc" ]]; then
     failed=1
     warn ".zshrc missing"
+  fi
+  # Fish is optional; only assert its config once fish itself is present.
+  if core::have fish && [[ ! -f "$(fish::config_dir)/config.fish" ]]; then
+    failed=1
+    warn "fish config.fish missing"
   fi
   if [[ ${failed} -eq 0 ]]; then
     success "Basic self-test passed"
@@ -94,7 +100,7 @@ system::summary() {
   headline "Summary"
 
   local -a tools=(
-    zsh git curl wget gh nvm node ni pnpm
+    zsh fish git curl wget gh nvm node ni pnpm
     fzf fd bat tree diff-so-fancy pyenv glow gum age
   )
   local tool

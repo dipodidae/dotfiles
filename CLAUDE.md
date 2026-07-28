@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A modular dotfiles installer and Zsh configuration for Ubuntu/macOS dev environments. The installer provisions tools (Node, Python, fzf, bat, etc.), configures Zsh with Oh My Zsh + Pure prompt, and optionally decrypts age-encrypted secrets.
+A modular dotfiles installer and Zsh configuration for Ubuntu/macOS dev environments. The installer provisions tools (Node, Python, fzf, bat, etc.), configures Zsh with Oh My Zsh + Pure prompt, and optionally decrypts age-encrypted secrets. Fish is supported as a secondary shell (Zsh stays the login shell).
 
 ## Commands
 
@@ -25,12 +25,14 @@ The canonical lint pipeline is `./scripts/lint-shell.sh`. CI runs exactly this.
 
 **Style audit** (`scripts/audit-shell-style.sh`): Non-trivial functions need the `#######` doc header. Scripts >120 lines need a `main()` with tail call. Files >400 lines get a refactor warning.
 
+**Fish** (`*.fish`): checked with `fish -n` (syntax) and `fish_indent --check` (formatting), since shellcheck/shfmt cannot parse fish. Both steps skip gracefully when fish is absent. Format with `fish_indent -w <file>` or `make format`.
+
 ## Architecture
 
 **`install.sh`** is the entry point. It can bootstrap from a curl pipe (clones the repo first) or run directly. It sources all `lib/` modules in order, then calls `main()` which orchestrates setup steps sequentially.
 
 **Module loading order** (defined in `install.sh`):
-`logging` → `core` → `fs` → `pkg` → `python` → `node` → `dev_tools` → `zsh` → `secrets` → `system`
+`logging` → `core` → `fs` → `pkg` → `python` → `node` → `dev_tools` → `zsh` → `fish` → `secrets` → `system`
 
 Each `lib/*.sh` module is a library of functions namespaced with `module::function_name` (e.g., `pkg::install`, `core::run`, `zsh::setup`). Modules are sourced — not executed — so they must not have top-level side effects.
 
@@ -73,3 +75,9 @@ Full standards are in `.github/copilot-instructions.md`. Key points:
 ## Zsh Configuration
 
 `.zshrc` is the interactive shell config (symlinked by the installer). It is Zsh, not Bash — shellcheck does not lint it. `.zshrc.help.md` provides in-shell help via the `help` command. Users extend via `~/.zshrc.local` (not tracked).
+
+## Fish Configuration
+
+`fish/config.fish` is symlinked to `~/.config/fish/config.fish` by `lib/fish.sh`. It mirrors `.zshrc`'s environment and macros in fish syntax. Keep the two in step when changing PATH setup, navigation helpers, or ni/git shortcuts.
+
+`nvm` is a bash/zsh function and cannot be sourced by fish, so the config resolves nvm's `default` alias chain (`default` → `lts/*` → `lts/<codename>` → `vX.Y.Z`) and prepends that version's `bin` to `PATH`, falling back to the newest installed version. This is what makes `node`, `pnpm`, and `ni` resolve in fish. Users extend via `~/.config/fish/config.local.fish` (not tracked).

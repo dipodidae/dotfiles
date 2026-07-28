@@ -6,6 +6,8 @@ on:
       - '**.sh'
       - '**.bash'
       - '**.zsh'
+      - '**.fish'
+      - '.zshrc'
       - '.shellcheckrc'
       - '.shfmt.conf'
       - '.pre-commit-config.yaml'
@@ -15,6 +17,8 @@ on:
       - '**.sh'
       - '**.bash'
       - '**.zsh'
+      - '**.fish'
+      - '.zshrc'
       - '.shellcheckrc'
       - '.shfmt.conf'
       - '.pre-commit-config.yaml'
@@ -32,10 +36,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies (shellcheck, shfmt)
+      - name: Install dependencies (shellcheck, shfmt, zsh, fish)
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y shellcheck zsh
+          sudo apt-get install -y shellcheck zsh fish
           if ! command -v shfmt >/dev/null; then
             curl -sS https://webinstall.dev/shfmt | bash
             echo "$HOME/.local/bin" >> $GITHUB_PATH

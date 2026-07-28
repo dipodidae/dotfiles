@@ -107,6 +107,70 @@ check_zsh() {
 }
 
 #######################################
+# Syntax-check and format-check fish scripts.
+# Uses "fish -n" and "fish_indent --check" because shellcheck and shfmt
+# cannot parse fish syntax. Skips when fish is unavailable (e.g. CI images
+# without fish), matching how check_zsh handles a missing zsh.
+# Globals:
+#   REPO_ROOT
+# Returns:
+#   0 when all fish files parse and are formatted, 1 otherwise.
+#######################################
+check_fish() {
+  log "==> Fish syntax + format check ..."
+
+  local -a ffiles
+  mapfile -t ffiles < <(git -C "${REPO_ROOT}" ls-files '*.fish' 2> /dev/null || true)
+
+  if ((${#ffiles[@]} == 0)); then
+    log "No fish files found"
+    return 0
+  fi
+
+  if ! command -v fish > /dev/null; then
+    log "fish binary not available; skipping fish check"
+    return 0
+  fi
+
+  local -a abs_ffiles
+  local file
+  for file in "${ffiles[@]}"; do
+    abs_ffiles+=("${REPO_ROOT}/${file}")
+  done
+
+  local -a bad_syntax=() bad_format=()
+  local candidate
+  for candidate in "${abs_ffiles[@]}"; do
+    if ! fish -n -- "${candidate}" > /dev/null 2>&1; then
+      bad_syntax+=("${candidate}")
+      continue
+    fi
+    # fish_indent ships with fish; guard anyway rather than hard-fail.
+    if command -v fish_indent > /dev/null &&
+      ! fish_indent --check "${candidate}" > /dev/null 2>&1; then
+      bad_format+=("${candidate}")
+    fi
+  done
+
+  local status=0
+  if ((${#bad_syntax[@]} > 0)); then
+    err "Fish syntax errors detected in:"
+    printf '  %s\n' "${bad_syntax[@]}" >&2
+    status=1
+  fi
+  if ((${#bad_format[@]} > 0)); then
+    err "Fish formatting issues. Run: fish_indent -w <file>"
+    printf '  %s\n' "${bad_format[@]}" >&2
+    status=1
+  fi
+
+  if ((status == 0)); then
+    log "Fish syntax and formatting look good"
+  fi
+  return "${status}"
+}
+
+#######################################
 # Check formatting with shfmt.
 # Matches GitHub Actions "Check formatting (shfmt)" step.
 # Globals:
@@ -166,6 +230,7 @@ main() {
   # Run all checks (continue on failure to show all issues)
   check_bash || exit_code=1
   check_zsh || exit_code=1
+  check_fish || exit_code=1
   check_format || exit_code=1
   check_audit || exit_code=1
 

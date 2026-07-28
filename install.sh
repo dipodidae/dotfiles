@@ -81,7 +81,9 @@ else
   readonly C_BOLD=""
 fi
 
-readonly MODULES=(logging core fs pkg python node dev_tools zsh secrets system)
+readonly MODULES=(
+  logging core fs pkg python node dev_tools zsh fish secrets system
+)
 for module in "${MODULES[@]}"; do
   module_path="${SCRIPT_DIR}/lib/${module}.sh"
   if [[ ! -f "${module_path}" ]]; then
@@ -194,6 +196,7 @@ main() {
   node::setup
   python::setup
   zsh::apply_dotfiles
+  fish::setup
   dev_tools::setup
   secrets::setup
   zsh::ensure_default_shell
